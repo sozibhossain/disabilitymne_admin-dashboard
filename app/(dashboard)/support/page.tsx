@@ -31,7 +31,7 @@ import {
   type ChatThread,
   type SupportTicket,
 } from "@/lib/api";
-import { formatDate, formatRelativeTime } from "@/lib/utils";
+import { cn, formatDate, formatRelativeTime } from "@/lib/utils";
 import { useChatSocket } from "@/hooks/use-chat-socket";
 
 export default function SupportPage() {
@@ -143,7 +143,12 @@ export default function SupportPage() {
   const activeThread: ChatThread | null = threads.find((thread) => thread.id === effectiveActiveThreadId) || null;
 
   return (
-    <div className="space-y-5">
+    <div
+      className={cn(
+        "space-y-5",
+        tab === "chat" && "flex h-full min-h-0 flex-col overflow-hidden"
+      )}
+    >
       <PageTitle title={tab === "tickets" ? "Support Messages" : "Support Chat"} breadcrumb="Dashboard  >  Support" />
 
       <div className="flex gap-2">
@@ -238,8 +243,8 @@ export default function SupportPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardContent className="grid min-h-[68vh] grid-cols-1 gap-4 p-4 xl:grid-cols-[340px_1fr]">
+        <Card className="min-h-0 flex-1 overflow-hidden">
+          <CardContent className="grid h-full min-h-0 grid-cols-1 gap-4 overflow-hidden p-4 xl:grid-cols-[340px_1fr]">
             <div className="space-y-3 rounded-xl border border-white/10 bg-white/5 p-3">
               <Input
                 placeholder="Search thread"
@@ -308,7 +313,7 @@ export default function SupportPage() {
               <Pagination page={chatPage} totalPages={chatThreadsQuery.data?.meta?.totalPages || 1} onPageChange={setChatPage} />
             </div>
 
-            <div className="flex h-full flex-col rounded-xl border border-white/10 bg-white/5">
+            <div className="flex h-[650px] flex-col overflow-hidden rounded-xl border border-white/10 bg-white/5">
               {activeThread ? (
                 <>
                   <div className="border-b border-white/10 px-4 py-3">
@@ -316,7 +321,7 @@ export default function SupportPage() {
                     <p className="text-sm text-slate-300">{activeThread.counterpart?.email}</p>
                   </div>
 
-                  <div className="flex-1 space-y-3 overflow-y-auto p-4">
+                  <div className=" flex-1 space-y-3 overflow-y-auto p-4">
                     {messagesQuery.isLoading ? (
                       <TableSkeleton rows={6} />
                     ) : messages.length === 0 ? (
