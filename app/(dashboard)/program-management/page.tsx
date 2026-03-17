@@ -19,6 +19,7 @@ import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { useFilePreview } from "@/hooks/use-file-preview";
 import {
   createProgram,
   deleteProgram,
@@ -56,6 +57,16 @@ export default function ProgramManagementPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
   const [formData, setFormData] = useState(defaultForm);
+  const [programImageFile, setProgramImageFile] = useState<File | null>(null);
+  const [programThumbnailFile, setProgramThumbnailFile] = useState<File | null>(null);
+  const programImagePreview = useFilePreview(programImageFile);
+  const programThumbnailPreview = useFilePreview(programThumbnailFile);
+
+  const resetFormState = () => {
+    setFormData(defaultForm);
+    setProgramImageFile(null);
+    setProgramThumbnailFile(null);
+  };
 
   const programsQuery = useQuery({
     queryKey: ["admin-programs", page, search, status],
@@ -77,7 +88,7 @@ export default function ProgramManagementPage() {
     onSuccess: () => {
       toast.success("Program created.");
       setFormOpen(false);
-      setFormData(defaultForm);
+      resetFormState();
       queryClient.invalidateQueries({ queryKey: ["admin-programs"] });
     },
     onError: (error) => toast.error(getErrorMessage(error)),
@@ -90,7 +101,7 @@ export default function ProgramManagementPage() {
       toast.success("Program updated.");
       setFormOpen(false);
       setSelectedProgram(null);
-      setFormData(defaultForm);
+      resetFormState();
       queryClient.invalidateQueries({ queryKey: ["admin-programs"] });
     },
     onError: (error) => toast.error(getErrorMessage(error)),
@@ -111,12 +122,14 @@ export default function ProgramManagementPage() {
 
   const onOpenCreate = () => {
     setSelectedProgram(null);
-    setFormData(defaultForm);
+    resetFormState();
     setFormOpen(true);
   };
 
   const onOpenEdit = (program: Program) => {
     setSelectedProgram(program);
+    setProgramImageFile(null);
+    setProgramThumbnailFile(null);
     setFormData({
       programName: program.programName || "",
       durationMinutes: String(program.durationMinutes || 30),
@@ -136,23 +149,38 @@ export default function ProgramManagementPage() {
   const onSubmitForm = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const payload = {
-      programName: formData.programName,
-      programDuration: `${formData.durationMinutes} Minutes`,
-      durationMinutes: Number(formData.durationMinutes),
-      programLevel: formData.programLevel,
-      userType: formData.userType as "normal_user" | "premium_user",
-      assignedUser: formData.userType === "premium_user" ? formData.assignedUser : undefined,
-      programDescription: formData.programDescription,
-      mobilityType: formData.mobilityType,
-      exerciseIds: formData.exerciseIds
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean),
-      programImages: [formData.programImage].filter(Boolean),
-      programThumbnails: [formData.programThumbnail].filter(Boolean),
-      status: formData.status,
-    };
+    if (!selectedProgram && !programImageFile) {
+      toast.error("Program image is required.");
+      return;
+    }
+
+    const exerciseIds = formData.exerciseIds
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    const payload = new FormData();
+    payload.append("programName", formData.programName);
+    payload.append("programDuration", `${formData.durationMinutes} Minutes`);
+    payload.append("durationMinutes", String(Number(formData.durationMinutes)));
+    payload.append("programLevel", formData.programLevel);
+    payload.append("userType", formData.userType);
+    payload.append("programDescription", formData.programDescription);
+    payload.append("mobilityType", formData.mobilityType);
+    payload.append("exerciseIds", JSON.stringify(exerciseIds));
+    payload.append("status", formData.status);
+
+    if (formData.userType === "premium_user" && formData.assignedUser) {
+      payload.append("assignedUser", formData.assignedUser);
+    }
+
+    if (programImageFile) {
+      payload.append("programImages", programImageFile);
+    }
+
+    if (programThumbnailFile) {
+      payload.append("programThumbnails", programThumbnailFile);
+    }
 
     if (selectedProgram) {
       updateMutation.mutate({ programId: selectedProgram.id, payload });
@@ -279,6 +307,7 @@ export default function ProgramManagementPage() {
         onClose={() => {
           setFormOpen(false);
           setSelectedProgram(null);
+          resetFormState();
         }}
         title={selectedProgram ? "Edit Program" : "Add New Program"}
       >
@@ -379,19 +408,35 @@ export default function ProgramManagementPage() {
               </p>
             </div>
             <div className="space-y-2 md:col-span-2">
-              <Label>Program Image URL</Label>
+              <Label>Program Image</Label>
               <Input
-                value={formData.programImage}
-                onChange={(event) => setFormData((prev) => ({ ...prev, programImage: event.target.value }))}
-                required
+                type="file"
+                accept="image/*"
+                onChange={(event) => setProgramImageFile(event.target.files?.[0] || null)}
+                required={!selectedProgram}
               />
+              {programImagePreview || formData.programImage ? (
+                <img
+                  src={programImagePreview || formData.programImage}
+                  alt="Program preview"
+                  className="h-40 w-full rounded-lg object-cover"
+                />
+              ) : null}
             </div>
             <div className="space-y-2 md:col-span-2">
-              <Label>Program Thumbnail URL</Label>
+              <Label>Program Thumbnail</Label>
               <Input
-                value={formData.programThumbnail}
-                onChange={(event) => setFormData((prev) => ({ ...prev, programThumbnail: event.target.value }))}
+                type="file"
+                accept="image/*"
+                onChange={(event) => setProgramThumbnailFile(event.target.files?.[0] || null)}
               />
+              {programThumbnailPreview || formData.programThumbnail ? (
+                <img
+                  src={programThumbnailPreview || formData.programThumbnail}
+                  alt="Program thumbnail preview"
+                  className="h-28 w-full rounded-lg object-cover"
+                />
+              ) : null}
             </div>
           </div>
 

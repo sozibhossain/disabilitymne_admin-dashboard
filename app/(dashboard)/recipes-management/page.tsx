@@ -19,6 +19,7 @@ import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { useFilePreview } from "@/hooks/use-file-preview";
 import {
   createRecipe,
   deleteRecipe,
@@ -56,6 +57,13 @@ export default function RecipesManagementPage() {
   const [viewOpen, setViewOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [formData, setFormData] = useState(defaultForm);
+  const [recipeImageFile, setRecipeImageFile] = useState<File | null>(null);
+  const recipeImagePreview = useFilePreview(recipeImageFile);
+
+  const resetFormState = () => {
+    setFormData(defaultForm);
+    setRecipeImageFile(null);
+  };
 
   const recipesQuery = useQuery({
     queryKey: ["admin-recipes", page, search, status],
@@ -72,7 +80,7 @@ export default function RecipesManagementPage() {
     onSuccess: () => {
       toast.success("Recipe created.");
       setFormOpen(false);
-      setFormData(defaultForm);
+      resetFormState();
       queryClient.invalidateQueries({ queryKey: ["admin-recipes"] });
     },
     onError: (error) => toast.error(getErrorMessage(error)),
@@ -85,7 +93,7 @@ export default function RecipesManagementPage() {
       toast.success("Recipe updated.");
       setFormOpen(false);
       setSelectedRecipe(null);
-      setFormData(defaultForm);
+      resetFormState();
       queryClient.invalidateQueries({ queryKey: ["admin-recipes"] });
     },
     onError: (error) => toast.error(getErrorMessage(error)),
@@ -106,12 +114,13 @@ export default function RecipesManagementPage() {
 
   const onOpenCreate = () => {
     setSelectedRecipe(null);
-    setFormData(defaultForm);
+    resetFormState();
     setFormOpen(true);
   };
 
   const onOpenEdit = (recipe: Recipe) => {
     setSelectedRecipe(recipe);
+    setRecipeImageFile(null);
     setFormData({
       recipeName: recipe.recipeName || "",
       durationMinutes: String(recipe.durationMinutes || 10),
@@ -133,25 +142,37 @@ export default function RecipesManagementPage() {
   const onSubmitForm = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const payload = {
-      recipeName: formData.recipeName,
-      recipeDuration: `${formData.durationMinutes} Minutes`,
-      durationMinutes: Number(formData.durationMinutes),
-      recipeType: formData.recipeType,
-      userType: formData.userType as "normal_user" | "premium_user",
-      assignedUser: formData.userType === "premium_user" ? formData.assignedUser : undefined,
-      howToPrepare: formData.howToPrepare,
-      ingredients: formData.ingredients
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean),
-      recipeImages: [formData.recipeImage].filter(Boolean),
-      caloriesKcal: Number(formData.caloriesKcal),
-      proteinG: Number(formData.proteinG),
-      carbsG: Number(formData.carbsG),
-      fatG: Number(formData.fatG),
-      status: formData.status,
-    };
+    if (!selectedRecipe && !recipeImageFile) {
+      toast.error("Recipe image is required.");
+      return;
+    }
+
+    const ingredients = formData.ingredients
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    const payload = new FormData();
+    payload.append("recipeName", formData.recipeName);
+    payload.append("recipeDuration", `${formData.durationMinutes} Minutes`);
+    payload.append("durationMinutes", String(Number(formData.durationMinutes)));
+    payload.append("recipeType", formData.recipeType);
+    payload.append("userType", formData.userType);
+    payload.append("howToPrepare", formData.howToPrepare);
+    payload.append("ingredients", JSON.stringify(ingredients));
+    payload.append("caloriesKcal", formData.caloriesKcal);
+    payload.append("proteinG", formData.proteinG);
+    payload.append("carbsG", formData.carbsG);
+    payload.append("fatG", formData.fatG);
+    payload.append("status", formData.status);
+
+    if (formData.userType === "premium_user" && formData.assignedUser) {
+      payload.append("assignedUser", formData.assignedUser);
+    }
+
+    if (recipeImageFile) {
+      payload.append("recipeImages", recipeImageFile);
+    }
 
     if (selectedRecipe) {
       updateMutation.mutate({ recipeId: selectedRecipe.id, payload });
@@ -286,6 +307,7 @@ export default function RecipesManagementPage() {
         onClose={() => {
           setFormOpen(false);
           setSelectedRecipe(null);
+          resetFormState();
         }}
         title={selectedRecipe ? "Edit Recipe" : "Add New Recipes"}
       >
@@ -365,12 +387,20 @@ export default function RecipesManagementPage() {
               />
             </div>
             <div className="space-y-2 md:col-span-2">
-              <Label>Recipe Image URL</Label>
+              <Label>Recipe Image</Label>
               <Input
-                value={formData.recipeImage}
-                onChange={(event) => setFormData((prev) => ({ ...prev, recipeImage: event.target.value }))}
-                required
+                type="file"
+                accept="image/*"
+                onChange={(event) => setRecipeImageFile(event.target.files?.[0] || null)}
+                required={!selectedRecipe}
               />
+              {recipeImagePreview || formData.recipeImage ? (
+                <img
+                  src={recipeImagePreview || formData.recipeImage}
+                  alt="Recipe preview"
+                  className="h-40 w-full rounded-lg object-cover"
+                />
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label>Calories (kcal)</Label>

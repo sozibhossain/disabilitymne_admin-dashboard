@@ -224,6 +224,18 @@ function unwrapPaginated<T>(response: { data: ApiEnvelope<T[]> }) {
   };
 }
 
+const getMultipartConfig = (payload: unknown) => {
+  if (typeof FormData === "undefined" || !(payload instanceof FormData)) {
+    return undefined;
+  }
+
+  return {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  };
+};
+
 export function getErrorMessage(error: unknown, fallback = "Something went wrong.") {
   if (axios.isAxiosError(error)) {
     return String(error.response?.data?.message || fallback);
@@ -306,7 +318,7 @@ export async function getProgramPremiumUsers(search?: string) {
   return unwrap(response);
 }
 
-export async function createProgram(payload: {
+export type CreateProgramPayload = {
   programName: string;
   programDuration: string;
   durationMinutes: number;
@@ -319,12 +331,9 @@ export async function createProgram(payload: {
   programImages: string[];
   programThumbnails?: string[];
   status?: string;
-}) {
-  const response = await api.post<ApiEnvelope<Program>>("/programs/admin", payload);
-  return unwrap(response);
-}
+};
 
-export async function updateProgram(programId: string, payload: Partial<{
+export type UpdateProgramPayload = Partial<{
   programName: string;
   programDuration: string;
   durationMinutes: number;
@@ -337,8 +346,19 @@ export async function updateProgram(programId: string, payload: Partial<{
   programImages: string[];
   programThumbnails: string[];
   status: string;
-}>) {
-  const response = await api.patch<ApiEnvelope<Program>>(`/programs/admin/${programId}`, payload);
+}>;
+
+export async function createProgram(payload: CreateProgramPayload | FormData) {
+  const response = await api.post<ApiEnvelope<Program>>("/programs/admin", payload, getMultipartConfig(payload));
+  return unwrap(response);
+}
+
+export async function updateProgram(programId: string, payload: UpdateProgramPayload | FormData) {
+  const response = await api.patch<ApiEnvelope<Program>>(
+    `/programs/admin/${programId}`,
+    payload,
+    getMultipartConfig(payload)
+  );
   return unwrap(response);
 }
 
@@ -371,7 +391,7 @@ export async function getExercisePremiumUsers(search?: string) {
   return unwrap(response);
 }
 
-export async function createExercise(payload: {
+export type CreateExercisePayload = {
   exerciseName: string;
   userType: "all_user" | "premium_user";
   assignedUser?: string;
@@ -385,12 +405,9 @@ export async function createExercise(payload: {
   defaultSets: Array<{ setNumber: number; reps?: number; durationSeconds?: number; weightKg?: number }>;
   isVisibleInLibrary: boolean;
   status?: string;
-}) {
-  const response = await api.post<ApiEnvelope<Exercise>>("/exercises/admin", payload);
-  return unwrap(response);
-}
+};
 
-export async function updateExercise(exerciseId: string, payload: Partial<{
+export type UpdateExercisePayload = Partial<{
   exerciseName: string;
   userType: "all_user" | "premium_user";
   assignedUser?: string;
@@ -404,8 +421,19 @@ export async function updateExercise(exerciseId: string, payload: Partial<{
   defaultSets: Array<{ setNumber: number; reps?: number; durationSeconds?: number; weightKg?: number }>;
   isVisibleInLibrary: boolean;
   status: string;
-}>) {
-  const response = await api.patch<ApiEnvelope<Exercise>>(`/exercises/admin/${exerciseId}`, payload);
+}>;
+
+export async function createExercise(payload: CreateExercisePayload | FormData) {
+  const response = await api.post<ApiEnvelope<Exercise>>("/exercises/admin", payload, getMultipartConfig(payload));
+  return unwrap(response);
+}
+
+export async function updateExercise(exerciseId: string, payload: UpdateExercisePayload | FormData) {
+  const response = await api.patch<ApiEnvelope<Exercise>>(
+    `/exercises/admin/${exerciseId}`,
+    payload,
+    getMultipartConfig(payload)
+  );
   return unwrap(response);
 }
 
@@ -446,7 +474,7 @@ export async function getRecipePremiumUsers(search?: string) {
   return unwrap(response);
 }
 
-export async function createRecipe(payload: {
+export type CreateRecipePayload = {
   recipeName: string;
   recipeDuration: string;
   durationMinutes: number;
@@ -461,12 +489,9 @@ export async function createRecipe(payload: {
   carbsG: number;
   fatG: number;
   status?: string;
-}) {
-  const response = await api.post<ApiEnvelope<Recipe>>("/recipes/admin", payload);
-  return unwrap(response);
-}
+};
 
-export async function updateRecipe(recipeId: string, payload: Partial<{
+export type UpdateRecipePayload = Partial<{
   recipeName: string;
   recipeDuration: string;
   durationMinutes: number;
@@ -481,8 +506,19 @@ export async function updateRecipe(recipeId: string, payload: Partial<{
   carbsG: number;
   fatG: number;
   status: string;
-}>) {
-  const response = await api.patch<ApiEnvelope<Recipe>>(`/recipes/admin/${recipeId}`, payload);
+}>;
+
+export async function createRecipe(payload: CreateRecipePayload | FormData) {
+  const response = await api.post<ApiEnvelope<Recipe>>("/recipes/admin", payload, getMultipartConfig(payload));
+  return unwrap(response);
+}
+
+export async function updateRecipe(recipeId: string, payload: UpdateRecipePayload | FormData) {
+  const response = await api.patch<ApiEnvelope<Recipe>>(
+    `/recipes/admin/${recipeId}`,
+    payload,
+    getMultipartConfig(payload)
+  );
   return unwrap(response);
 }
 

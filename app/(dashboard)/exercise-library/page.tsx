@@ -19,6 +19,7 @@ import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { useFilePreview } from "@/hooks/use-file-preview";
 import {
   createExercise,
   deleteExercise,
@@ -60,6 +61,19 @@ export default function ExerciseLibraryPage() {
   const [viewOpen, setViewOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [formData, setFormData] = useState(defaultForm);
+  const [exerciseImageFile, setExerciseImageFile] = useState<File | null>(null);
+  const [muscleImageFile, setMuscleImageFile] = useState<File | null>(null);
+  const [demoVideoFile, setDemoVideoFile] = useState<File | null>(null);
+  const exerciseImagePreview = useFilePreview(exerciseImageFile);
+  const muscleImagePreview = useFilePreview(muscleImageFile);
+  const demoVideoPreview = useFilePreview(demoVideoFile);
+
+  const resetFormState = () => {
+    setFormData(defaultForm);
+    setExerciseImageFile(null);
+    setMuscleImageFile(null);
+    setDemoVideoFile(null);
+  };
 
   const exercisesQuery = useQuery({
     queryKey: ["admin-exercises", page, search, status],
@@ -76,7 +90,7 @@ export default function ExerciseLibraryPage() {
     onSuccess: () => {
       toast.success("Exercise created.");
       setFormOpen(false);
-      setFormData(defaultForm);
+      resetFormState();
       queryClient.invalidateQueries({ queryKey: ["admin-exercises"] });
     },
     onError: (error) => toast.error(getErrorMessage(error)),
@@ -89,7 +103,7 @@ export default function ExerciseLibraryPage() {
       toast.success("Exercise updated.");
       setFormOpen(false);
       setSelectedExercise(null);
-      setFormData(defaultForm);
+      resetFormState();
       queryClient.invalidateQueries({ queryKey: ["admin-exercises"] });
     },
     onError: (error) => toast.error(getErrorMessage(error)),
@@ -118,13 +132,16 @@ export default function ExerciseLibraryPage() {
 
   const onOpenCreate = () => {
     setSelectedExercise(null);
-    setFormData(defaultForm);
+    resetFormState();
     setFormOpen(true);
   };
 
   const onOpenEdit = (exercise: Exercise) => {
     const primarySet = exercise.defaultSets?.[0];
     setSelectedExercise(exercise);
+    setExerciseImageFile(null);
+    setMuscleImageFile(null);
+    setDemoVideoFile(null);
     setFormData({
       exerciseName: exercise.exerciseName || "",
       userType: exercise.userType || "all_user",
@@ -149,6 +166,16 @@ export default function ExerciseLibraryPage() {
   const onSubmitForm = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    if (!selectedExercise && !exerciseImageFile) {
+      toast.error("Exercise image is required.");
+      return;
+    }
+
+    if (!selectedExercise && !demoVideoFile) {
+      toast.error("Demo video is required.");
+      return;
+    }
+
     const setCount = Math.max(1, Number(formData.setCount));
     const weightKg = Number(formData.weightKg || 1);
 
@@ -159,27 +186,41 @@ export default function ExerciseLibraryPage() {
       weightKg,
     }));
 
-    const payload = {
-      exerciseName: formData.exerciseName,
-      userType: formData.userType as "all_user" | "premium_user",
-      assignedUser: formData.userType === "premium_user" ? formData.assignedUser : undefined,
-      description: formData.description,
-      keyBenefits: formData.keyBenefits
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean),
-      muscleGroups: formData.muscleGroups
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean),
-      exerciseImages: [formData.exerciseImage].filter(Boolean),
-      targetMuscleImages: [formData.muscleImage].filter(Boolean),
-      demoVideos: [formData.demoVideo].filter(Boolean),
-      executionMode: formData.executionMode as "set_reps" | "countdown",
-      defaultSets,
-      isVisibleInLibrary: formData.isVisibleInLibrary === "true",
-      status: formData.status,
-    };
+    const keyBenefits = formData.keyBenefits
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const muscleGroups = formData.muscleGroups
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    const payload = new FormData();
+    payload.append("exerciseName", formData.exerciseName);
+    payload.append("userType", formData.userType);
+    payload.append("description", formData.description);
+    payload.append("keyBenefits", JSON.stringify(keyBenefits));
+    payload.append("muscleGroups", JSON.stringify(muscleGroups));
+    payload.append("executionMode", formData.executionMode);
+    payload.append("defaultSets", JSON.stringify(defaultSets));
+    payload.append("isVisibleInLibrary", String(formData.isVisibleInLibrary === "true"));
+    payload.append("status", formData.status);
+
+    if (formData.userType === "premium_user" && formData.assignedUser) {
+      payload.append("assignedUser", formData.assignedUser);
+    }
+
+    if (exerciseImageFile) {
+      payload.append("exerciseImages", exerciseImageFile);
+    }
+
+    if (muscleImageFile) {
+      payload.append("targetMuscleImages", muscleImageFile);
+    }
+
+    if (demoVideoFile) {
+      payload.append("demoVideos", demoVideoFile);
+    }
 
     if (selectedExercise) {
       updateMutation.mutate({ exerciseId: selectedExercise.id, payload });
@@ -321,6 +362,7 @@ export default function ExerciseLibraryPage() {
         onClose={() => {
           setFormOpen(false);
           setSelectedExercise(null);
+          resetFormState();
         }}
         title={selectedExercise ? "Edit Exercise" : "Add New Exercise"}
       >
@@ -433,27 +475,51 @@ export default function ExerciseLibraryPage() {
               />
             </div>
             <div className="space-y-2 md:col-span-2">
-              <Label>Exercise Image URL</Label>
+              <Label>Exercise Image</Label>
               <Input
-                value={formData.exerciseImage}
-                onChange={(event) => setFormData((prev) => ({ ...prev, exerciseImage: event.target.value }))}
-                required
+                type="file"
+                accept="image/*"
+                onChange={(event) => setExerciseImageFile(event.target.files?.[0] || null)}
+                required={!selectedExercise}
               />
+              {exerciseImagePreview || formData.exerciseImage ? (
+                <img
+                  src={exerciseImagePreview || formData.exerciseImage}
+                  alt="Exercise preview"
+                  className="h-40 w-full rounded-lg object-cover"
+                />
+              ) : null}
             </div>
             <div className="space-y-2 md:col-span-2">
-              <Label>Target Muscle Image URL</Label>
+              <Label>Target Muscle Image</Label>
               <Input
-                value={formData.muscleImage}
-                onChange={(event) => setFormData((prev) => ({ ...prev, muscleImage: event.target.value }))}
+                type="file"
+                accept="image/*"
+                onChange={(event) => setMuscleImageFile(event.target.files?.[0] || null)}
               />
+              {muscleImagePreview || formData.muscleImage ? (
+                <img
+                  src={muscleImagePreview || formData.muscleImage}
+                  alt="Target muscle preview"
+                  className="h-32 w-full rounded-lg object-cover"
+                />
+              ) : null}
             </div>
             <div className="space-y-2 md:col-span-2">
-              <Label>Demo Video URL</Label>
+              <Label>Demo Video</Label>
               <Input
-                value={formData.demoVideo}
-                onChange={(event) => setFormData((prev) => ({ ...prev, demoVideo: event.target.value }))}
-                required
+                type="file"
+                accept="video/*"
+                onChange={(event) => setDemoVideoFile(event.target.files?.[0] || null)}
+                required={!selectedExercise}
               />
+              {demoVideoPreview || formData.demoVideo ? (
+                <video
+                  src={demoVideoPreview || formData.demoVideo}
+                  controls
+                  className="max-h-56 w-full rounded-lg bg-slate-900"
+                />
+              ) : null}
             </div>
             <div className="space-y-2">
               <Label>Visible in Library</Label>
