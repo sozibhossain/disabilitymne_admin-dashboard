@@ -570,7 +570,7 @@ export async function getWorkoutExperienceById(experienceId: string) {
 }
 
 export async function getAdminSettingsProfile() {
-  const response = await api.get<ApiEnvelope<Record<string, unknown>>>("/admin/settings/profile");
+  const response = await api.get<ApiEnvelope<Record<string, unknown>>>("/users/me/profile");
   return unwrap(response);
 }
 
@@ -583,6 +583,19 @@ export async function updateAdminSettingsProfile(payload: {
   profileImage?: string | null;
 }) {
   const response = await api.patch<ApiEnvelope<Record<string, unknown>>>("/admin/settings/profile", payload);
+  return unwrap(response);
+}
+
+export async function updateAdminSettingsProfileImage(profileImage: File) {
+  const formData = new FormData();
+  formData.append("profileImage", profileImage);
+
+  const response = await api.patch<ApiEnvelope<Record<string, unknown>>>("/users/me/profile-image", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+
   return unwrap(response);
 }
 

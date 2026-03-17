@@ -1,7 +1,7 @@
 "use client";
 
 import { Edit3 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -12,7 +12,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { getAdminSettingsProfile, getErrorMessage, updateAdminSettingsPassword, updateAdminSettingsProfile } from "@/lib/api";
+import {
+  getAdminSettingsProfile,
+  getErrorMessage,
+  updateAdminSettingsPassword,
+  updateAdminSettingsProfile,
+  updateAdminSettingsProfileImage,
+} from "@/lib/api";
 
 type ProfileForm = {
   firstName: string;
@@ -31,6 +37,7 @@ const initialPassword = {
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
+  const profileImageInputRef = useRef<HTMLInputElement>(null);
   const [activeTab, setActiveTab] = useState<"profile" | "password">("profile");
   const [profileEdits, setProfileEdits] = useState<Partial<ProfileForm>>({});
   const [passwordData, setPasswordData] = useState(initialPassword);
@@ -64,6 +71,19 @@ export default function SettingsPage() {
     mutationFn: updateAdminSettingsProfile,
     onSuccess: () => {
       toast.success("Profile updated successfully.");
+      queryClient.invalidateQueries({ queryKey: ["admin-settings-profile"] });
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+  });
+
+  const profileImageMutation = useMutation({
+    mutationFn: updateAdminSettingsProfileImage,
+    onSuccess: (updatedProfile) => {
+      toast.success("Profile image updated successfully.");
+      setProfileEdits((prev) => ({
+        ...prev,
+        profileImage: String(updatedProfile?.profileImage || ""),
+      }));
       queryClient.invalidateQueries({ queryKey: ["admin-settings-profile"] });
     },
     onError: (error) => toast.error(getErrorMessage(error)),
@@ -109,17 +129,36 @@ export default function SettingsPage() {
                 {profileData.profileImage ? (
                   <img src={profileData.profileImage} alt="Profile" className="size-16 rounded-full object-cover" />
                 ) : (
-                  <div className="flex size-16 items-center justify-center rounded-full bg-white/10 text-xl font-semibold">A</div>
+                  <div className="flex size-16 items-center justify-center rounded-full bg-white/10 text-xl font-semibold">
+                    {profileData.firstName.trim().charAt(0).toUpperCase() || "A"}
+                  </div>
                 )}
                 <div>
                   <p className="text-3xl font-semibold text-white">{`${profileData.firstName} ${profileData.lastName}`.trim() || "Admin"}</p>
                   <p className="text-sm text-slate-300">@admin</p>
                 </div>
               </div>
-              <Button variant="secondary">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={profileImageMutation.isPending}
+                onClick={() => profileImageInputRef.current?.click()}
+              >
                 <Edit3 className="mr-2 size-4" />
-                Edit
+                {profileImageMutation.isPending ? "Uploading..." : "Update Image"}
               </Button>
+              <input
+                ref={profileImageInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(event) => {
+                  const selectedFile = event.target.files?.[0];
+                  if (!selectedFile) return;
+                  profileImageMutation.mutate(selectedFile);
+                  event.target.value = "";
+                }}
+              />
             </div>
 
             <form
@@ -161,13 +200,6 @@ export default function SettingsPage() {
                     onChange={(event) => setProfileEdits((prev) => ({ ...prev, phone: event.target.value }))}
                   />
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Profile Image URL</Label>
-                <Input
-                  value={profileData.profileImage}
-                  onChange={(event) => setProfileEdits((prev) => ({ ...prev, profileImage: event.target.value }))}
-                />
               </div>
               <div className="space-y-2">
                 <Label>Bio</Label>
