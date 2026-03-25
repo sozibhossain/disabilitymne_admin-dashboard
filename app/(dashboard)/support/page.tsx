@@ -1,7 +1,9 @@
 "use client";
 
+import { MessageCircleMore } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { EmptyState } from "@/components/shared/empty-state";
@@ -15,6 +17,7 @@ import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  createOrGetChatThread,
   getErrorMessage,
   getSupportTickets,
   updateSupportTicket,
@@ -29,9 +32,11 @@ const getUnreadCount = (status: SupportTicket["status"]) => {
 };
 
 export default function SupportPage() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
+  const [openingChatForTicketId, setOpeningChatForTicketId] = useState<string | null>(null);
   const [ticketUpdate, setTicketUpdate] = useState<{
     status: SupportTicket["status"];
     adminResponse: string;
@@ -62,6 +67,25 @@ export default function SupportPage() {
     onError: (error) => toast.error(getErrorMessage(error)),
   });
 
+  const openChatMutation = useMutation({
+    mutationFn: (premiumUserId: string) => createOrGetChatThread({ premiumUserId }),
+    onSuccess: (thread, premiumUserId) => {
+      const ticket = tickets.find((item) => item.user?.id === premiumUserId);
+      const name = [ticket?.user?.firstName, ticket?.user?.lastName].filter(Boolean).join(" ");
+      const email = ticket?.user?.email || "";
+      const query = new URLSearchParams();
+      if (name) {
+        query.set("name", name);
+      }
+      if (email) {
+        query.set("email", email);
+      }
+      router.push(`/support/chat/${thread.id}${query.size > 0 ? `?${query.toString()}` : ""}`);
+    },
+    onError: (error) => toast.error(getErrorMessage(error)),
+    onSettled: () => setOpeningChatForTicketId(null),
+  });
+
   const tickets = useMemo(() => ticketsQuery.data?.data || [], [ticketsQuery.data?.data]);
   const totalCount = ticketsQuery.data?.meta?.total || 0;
   const totalPages = ticketsQuery.data?.meta?.totalPages || 1;
@@ -87,16 +111,27 @@ export default function SupportPage() {
             const unreadCount = getUnreadCount(ticket.status);
 
             return (
-              <button
+              <div
                 key={ticket.id}
-                type="button"
                 className="flex w-full items-start justify-between gap-4 rounded-lg px-2 py-2 text-left transition-colors hover:bg-white/5"
+                role="button"
+                tabIndex={0}
                 onClick={() => {
                   setSelectedTicket(ticket);
                   setTicketUpdate({
                     status: ticket.status,
                     adminResponse: ticket.adminResponse || "",
                   });
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setSelectedTicket(ticket);
+                    setTicketUpdate({
+                      status: ticket.status,
+                      adminResponse: ticket.adminResponse || "",
+                    });
+                  }
                 }}
               >
                 <div className="flex min-w-0 items-start gap-3">
@@ -110,13 +145,34 @@ export default function SupportPage() {
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-2">
                   <span className="text-xs text-slate-300">{formatRelativeTime(ticket.createdAt)}</span>
-                  {unreadCount > 0 ? (
-                    <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#ff1d58] px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                      {unreadCount}
-                    </span>
-                  ) : null}
+                  <div className="flex items-center gap-2">
+                    {unreadCount > 0 ? (
+                      <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#ff1d58] px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                        {unreadCount}
+                      </span>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="inline-flex size-6 items-center justify-center rounded-full bg-[#ff1d58] text-white transition-colors hover:bg-[#ff3f73] disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        event.preventDefault();
+                        const premiumUserId = ticket.user?.id;
+                        if (!premiumUserId) {
+                          toast.error("User info is missing for this ticket.");
+                          return;
+                        }
+                        setOpeningChatForTicketId(ticket.id);
+                        openChatMutation.mutate(premiumUserId);
+                      }}
+                      disabled={openChatMutation.isPending && openingChatForTicketId === ticket.id}
+                      aria-label="Open chat page"
+                    >
+                      <MessageCircleMore className="size-3.5" />
+                    </button>
+                  </div>
                 </div>
-              </button>
+              </div>
             );
           })}
 

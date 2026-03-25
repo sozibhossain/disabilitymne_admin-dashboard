@@ -232,14 +232,20 @@ export default function ExerciseLibraryPage() {
 
     if (exerciseImageFile) {
       payload.append("exerciseImages", exerciseImageFile);
+    } else if (selectedExercise && formData.exerciseImage) {
+      payload.append("exerciseImages", JSON.stringify([formData.exerciseImage]));
     }
 
     if (muscleImageFile) {
       payload.append("targetMuscleImages", muscleImageFile);
+    } else if (selectedExercise && formData.muscleImage) {
+      payload.append("targetMuscleImages", JSON.stringify([formData.muscleImage]));
     }
 
     if (demoVideoFile) {
       payload.append("demoVideos", demoVideoFile);
+    } else if (selectedExercise && formData.demoVideo) {
+      payload.append("demoVideos", JSON.stringify([formData.demoVideo]));
     }
 
     if (selectedExercise) {

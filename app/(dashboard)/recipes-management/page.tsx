@@ -178,6 +178,8 @@ export default function RecipesManagementPage() {
 
     if (recipeImageFile) {
       payload.append("recipeImages", recipeImageFile);
+    } else if (selectedRecipe && formData.recipeImage) {
+      payload.append("recipeImages", JSON.stringify([formData.recipeImage]));
     }
 
     if (selectedRecipe) {

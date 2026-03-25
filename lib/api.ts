@@ -52,10 +52,20 @@ export type Program = {
   plan: string;
   assignedUser: { id: string; firstName: string; email: string } | null;
   programDescription: string;
+  safetyNote?: string;
   mobilityType: string;
+  weekCount?: number;
   totalExercises: number;
   exerciseIds: string[];
-  exercises: Array<{ id: string; exerciseName: string; executionMode?: string }>;
+  exercises: Array<{
+    id: string;
+    exerciseName: string;
+    executionMode?: string;
+    demoVideo?: string | null;
+    demoVideos?: string[];
+    image?: string | null;
+    exerciseImages?: string[];
+  }>;
   status: "draft" | "published" | "archived";
   isActive: boolean;
   programImage: string | null;

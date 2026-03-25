@@ -23,6 +23,7 @@ import {
   createProgram,
   deleteProgram,
   getAdminExercises,
+  getAdminProgramById,
   getAdminPrograms,
   getExercisePremiumUsers,
   getErrorMessage,
@@ -89,6 +90,7 @@ export default function ProgramManagementPage() {
   const [status, setStatus] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
+  const [viewProgramId, setViewProgramId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
   const [formData, setFormData] = useState(defaultForm);
@@ -140,6 +142,12 @@ export default function ProgramManagementPage() {
   const premiumUsersQuery = useQuery({
     queryKey: ["exercise-premium-users"],
     queryFn: () => getExercisePremiumUsers(),
+  });
+
+  const viewProgramQuery = useQuery({
+    queryKey: ["admin-program-details", viewProgramId],
+    queryFn: () => getAdminProgramById(viewProgramId || ""),
+    enabled: Boolean(viewOpen && viewProgramId),
   });
 
   const createMutation = useMutation({
@@ -228,6 +236,12 @@ export default function ProgramManagementPage() {
       status: program.status || "published",
     });
     setFormOpen(true);
+  };
+
+  const onOpenView = (program: Program) => {
+    setSelectedProgram(program);
+    setViewProgramId(program.id);
+    setViewOpen(true);
   };
 
   const onAddExercise = (exerciseId: string) => {
@@ -332,6 +346,16 @@ export default function ProgramManagementPage() {
     }));
   };
 
+  const activeViewProgram = viewProgramQuery.data || selectedProgram;
+  const featuredExercise = activeViewProgram?.exercises?.[0] as
+    | (Program["exercises"][number] & { demoVideo?: string | null; demoVideos?: string[] })
+    | undefined;
+  const featuredVideo = featuredExercise?.demoVideo || featuredExercise?.demoVideos?.[0] || "";
+  const closeViewModal = () => {
+    setViewOpen(false);
+    setViewProgramId(null);
+  };
+
   return (
     <div className="space-y-5">
       <PageTitle
@@ -427,10 +451,7 @@ export default function ProgramManagementPage() {
                             <button
                               type="button"
                               className="inline-flex h-8 items-center gap-2 rounded-md border border-[#2f80cc] bg-[#102849] px-3 text-xs font-semibold text-[#63bfff] transition-colors hover:bg-[#16345c]"
-                              onClick={() => {
-                                setSelectedProgram(program);
-                                setViewOpen(true);
-                              }}
+                              onClick={() => onOpenView(program)}
                             >
                               <Eye className="size-3.5" />
                               View Details
@@ -712,14 +733,32 @@ export default function ProgramManagementPage() {
         </form>
       </Modal>
 
-      <Modal open={viewOpen} onClose={() => setViewOpen(false)} title="" className="sm:max-w-4xl">
-        {selectedProgram ? (
+      <Modal
+        open={viewOpen}
+        onClose={closeViewModal}
+        title=""
+        className="sm:max-w-4xl"
+      >
+        {viewProgramQuery.isLoading && !activeViewProgram ? (
+          <div className="py-10 text-center text-sm text-slate-300">Loading program details...</div>
+        ) : viewProgramQuery.isError && !activeViewProgram ? (
+          <div className="space-y-3 py-6 text-center">
+            <p className="text-sm text-red-300">{getErrorMessage(viewProgramQuery.error, "Failed to load program details.")}</p>
+            <Button
+              type="button"
+              className="h-9 rounded border border-[#9cd7ff6e] bg-[linear-gradient(180deg,#98d5f8_0%,#5d97c4_100%)] px-4 text-xs"
+              onClick={() => viewProgramQuery.refetch()}
+            >
+              Try Again
+            </Button>
+          </div>
+        ) : activeViewProgram ? (
           <div className="space-y-4 text-slate-100">
             <div className="flex items-center justify-between">
               <button
                 type="button"
                 className="inline-flex items-center gap-1 text-xs text-slate-200 transition-colors hover:text-white"
-                onClick={() => setViewOpen(false)}
+                onClick={closeViewModal}
               >
                 <ArrowLeft className="size-4" />
                 Go Back
@@ -728,8 +767,8 @@ export default function ProgramManagementPage() {
                 type="button"
                 className="inline-flex size-8 items-center justify-center rounded-full bg-[#22bf61] text-white transition-colors hover:bg-[#2cd46d]"
                 onClick={() => {
-                  setViewOpen(false);
-                  onOpenEdit(selectedProgram);
+                  closeViewModal();
+                  onOpenEdit(activeViewProgram);
                 }}
                 aria-label="Edit program"
               >
@@ -739,10 +778,10 @@ export default function ProgramManagementPage() {
 
             <div className="grid gap-3 md:grid-cols-[1.8fr_1fr]">
               <div className="overflow-hidden rounded-lg border border-[#7cb6df55] bg-[#1b3457]/45">
-                {selectedProgram.programThumbnail || selectedProgram.programThumbnails?.[0] || selectedProgram.programImage || selectedProgram.programImages?.[0] ? (
+                {activeViewProgram.programThumbnail || activeViewProgram.programThumbnails?.[0] || activeViewProgram.programImage || activeViewProgram.programImages?.[0] ? (
                   <img
-                    src={selectedProgram.programThumbnail || selectedProgram.programThumbnails?.[0] || selectedProgram.programImage || selectedProgram.programImages?.[0] || ""}
-                    alt={`${selectedProgram.programName} banner`}
+                    src={activeViewProgram.programThumbnail || activeViewProgram.programThumbnails?.[0] || activeViewProgram.programImage || activeViewProgram.programImages?.[0] || ""}
+                    alt={`${activeViewProgram.programName} banner`}
                     className="h-28 w-full object-cover"
                   />
                 ) : (
@@ -750,33 +789,46 @@ export default function ProgramManagementPage() {
                 )}
               </div>
               <div className="overflow-hidden rounded-lg border border-[#7cb6df55] bg-[#1b3457]/45">
-                {selectedProgram.programImage || selectedProgram.programImages?.[0] ? (
-                  <img src={selectedProgram.programImage || selectedProgram.programImages?.[0] || ""} alt={selectedProgram.programName} className="h-28 w-full object-cover" />
+                {featuredVideo ? (
+                  <video
+                    src={featuredVideo}
+                    className="h-28 w-full object-cover"
+                    controls
+                    preload="metadata"
+                  />
+                ) : activeViewProgram.programImage || activeViewProgram.programImages?.[0] ? (
+                  <img src={activeViewProgram.programImage || activeViewProgram.programImages?.[0] || ""} alt={activeViewProgram.programName} className="h-28 w-full object-cover" />
                 ) : (
-                  <div className="flex h-28 items-center justify-center text-sm text-slate-300">No program image</div>
+                  <div className="flex h-28 items-center justify-center text-sm text-slate-300">No media available</div>
                 )}
               </div>
             </div>
 
             <div>
-              <h3 className="text-xl font-semibold text-white">{selectedProgram.programName}</h3>
-              <p className="mt-1 text-xs text-slate-300">Created: {formatDate(selectedProgram.createdAt)}</p>
+              <h3 className="text-xl font-semibold text-white">{activeViewProgram.programName}</h3>
+              <p className="mt-1 text-xs text-slate-300">Created: {formatDate(activeViewProgram.createdAt)}</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 <span className="rounded-full border border-[#7cb6df66] bg-[#1b3457]/70 px-2 py-1 text-[11px] text-slate-100">
-                  {selectedProgram.totalExercises} Exercise
+                  {activeViewProgram.totalExercises} Exercise
                 </span>
                 <span className="rounded-full border border-[#7cb6df66] bg-[#1b3457]/70 px-2 py-1 text-[11px] text-slate-100">
-                  {selectedProgram.durationMinutes} min
+                  {activeViewProgram.durationMinutes} min
                 </span>
                 <span className="rounded-full border border-[#7cb6df66] bg-[#1b3457]/70 px-2 py-1 text-[11px] capitalize text-slate-100">
-                  {selectedProgram.programLevel}
+                  {activeViewProgram.weekCount || 0} Weeks
+                </span>
+                <span className="rounded-full border border-[#7cb6df66] bg-[#1b3457]/70 px-2 py-1 text-[11px] capitalize text-slate-100">
+                  {activeViewProgram.programLevel}
+                </span>
+                <span className="rounded-full border border-[#7cb6df66] bg-[#1b3457]/70 px-2 py-1 text-[11px] capitalize text-slate-100">
+                  {activeViewProgram.status}
                 </span>
               </div>
             </div>
 
             <div>
               <p className="text-sm font-semibold text-white">Description</p>
-              <p className="mt-1 text-sm text-slate-200/90">{selectedProgram.programDescription || "No description available."}</p>
+              <p className="mt-1 text-sm text-slate-200/90">{activeViewProgram.programDescription || "No description available."}</p>
             </div>
 
             <div className="rounded-lg border border-[#7cb6df55] bg-[#1b3457]/35 p-3">
@@ -786,8 +838,8 @@ export default function ProgramManagementPage() {
                   type="button"
                   className="inline-flex h-8 items-center gap-2 rounded-md border border-[#8ec5eb6e] bg-[linear-gradient(180deg,#98d5f8_0%,#5d97c4_100%)] px-3 text-xs font-semibold text-white"
                   onClick={() => {
-                    setViewOpen(false);
-                    onOpenEdit(selectedProgram);
+                    closeViewModal();
+                    onOpenEdit(activeViewProgram);
                   }}
                 >
                   <Plus className="size-3.5" />
@@ -795,9 +847,9 @@ export default function ProgramManagementPage() {
                 </button>
               </div>
 
-              {selectedProgram.exercises?.length ? (
+              {activeViewProgram.exercises?.length ? (
                 <ul className="space-y-2">
-                  {selectedProgram.exercises.map((exercise, index) => (
+                  {activeViewProgram.exercises.map((exercise, index) => (
                     <li key={exercise.id || `${exercise.exerciseName}-${index}`} className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 text-sm text-slate-100">
                         <span className="inline-flex size-5 items-center justify-center rounded-full bg-[#4f8dc6] text-[11px] font-semibold">
@@ -809,8 +861,8 @@ export default function ProgramManagementPage() {
                         type="button"
                         className="inline-flex size-6 items-center justify-center rounded-full bg-[#ff2f5f] text-white"
                         onClick={() => {
-                          setViewOpen(false);
-                          onOpenEdit(selectedProgram);
+                          closeViewModal();
+                          onOpenEdit(activeViewProgram);
                         }}
                         aria-label="Remove exercise"
                       >

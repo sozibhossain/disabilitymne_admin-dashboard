@@ -74,7 +74,7 @@ export function AppSidebar({
       <nav className="space-y-2">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const active = pathname === item.href;
+          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
           return (
             <Link
