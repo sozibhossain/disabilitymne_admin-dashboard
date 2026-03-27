@@ -9,6 +9,15 @@ type RecipeViewDialogProps = {
   recipe: Recipe | null;
 };
 
+const isHtml = (value: string) => /<[a-z][\s\S]*>/i.test(value);
+const sanitizeRecipeHtml = (value: string) =>
+  value
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, "")
+    .replace(/\son\w+="[^"]*"/gi, "")
+    .replace(/\son\w+='[^']*'/gi, "")
+    .replace(/javascript:/gi, "");
+
 const formatDateTime = (rawValue: string) => {
   if (!rawValue) {
     return "-";
@@ -99,7 +108,18 @@ export function RecipeViewDialog({ open, onClose, recipe }: RecipeViewDialogProp
 
               <div>
                 <p className="mb-2 font-semibold text-white">How to prepare</p>
-                <p className="whitespace-pre-line text-sm text-slate-300">{recipe.howToPrepare || "No preparation guide."}</p>
+                {recipe.howToPrepare ? (
+                  isHtml(recipe.howToPrepare) ? (
+                    <div
+                      className="recipe-html-content rounded-lg border border-blue-300/25 bg-[#0f2a4a]/45 px-3 py-3 text-sm text-slate-200"
+                      dangerouslySetInnerHTML={{ __html: sanitizeRecipeHtml(recipe.howToPrepare) }}
+                    />
+                  ) : (
+                    <p className="whitespace-pre-line text-sm text-slate-300">{recipe.howToPrepare}</p>
+                  )
+                ) : (
+                  <p className="text-sm text-slate-300">No preparation guide.</p>
+                )}
               </div>
 
               <div>

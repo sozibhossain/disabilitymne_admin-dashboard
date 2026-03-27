@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import type { Recipe } from "@/lib/api";
 
-import { HowToPrepareEditor } from "./how-to-prepare-editor";
+import { HowToPrepareEditor, normalizeEditorHtml } from "./how-to-prepare-editor";
 
 export type RecipeFormState = {
   recipeName: string;
@@ -159,11 +159,12 @@ export function RecipeFormDialog({
                   <HowToPrepareEditor
                     value={howToPrepareEditor}
                     placeholder="Write preparation steps..."
-                    onChange={({ html, text }) => {
+                    onChange={({ html }) => {
+                      const normalizedHtml = normalizeEditorHtml(html);
                       setHowToPrepareEditor(html);
                       setFormData((prev) => ({
                         ...prev,
-                        howToPrepare: text,
+                        howToPrepare: normalizedHtml,
                       }));
                     }}
                   />

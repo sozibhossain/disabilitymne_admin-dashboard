@@ -17,6 +17,7 @@ import {
   createRecipe,
   deleteRecipe,
   getAdminRecipes,
+  getAdminRecipeById,
   getErrorMessage,
   getRecipePremiumUsers,
   updateRecipe,
@@ -25,7 +26,7 @@ import {
 
 import { RecipeFormDialog, type RecipeFormState } from "./_components/recipe-form-dialog";
 import { RecipeViewDialog } from "./_components/recipe-view-dialog";
-import { toEditorValue } from "./_components/how-to-prepare-editor";
+import { normalizeEditorHtml, toEditorValue } from "./_components/how-to-prepare-editor";
 
 const defaultForm: RecipeFormState = {
   recipeName: "",
@@ -55,6 +56,7 @@ export default function RecipesManagementPage() {
   const [howToPrepareEditor, setHowToPrepareEditor] = useState("");
   const [ingredientInput, setIngredientInput] = useState("");
   const [recipeImageFile, setRecipeImageFile] = useState<File | null>(null);
+  const [loadingRecipeId, setLoadingRecipeId] = useState<string | null>(null);
   const recipeImagePreview = useFilePreview(recipeImageFile);
 
   const resetFormState = () => {
@@ -127,25 +129,43 @@ export default function RecipesManagementPage() {
     setFormOpen(true);
   };
 
-  const onOpenEdit = (recipe: Recipe) => {
-    setSelectedRecipe(recipe);
+  const getRecipeDetails = async (recipeId: string) => {
+    setLoadingRecipeId(recipeId);
+    try {
+      return await getAdminRecipeById(recipeId);
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to load recipe details."));
+      return null;
+    } finally {
+      setLoadingRecipeId(null);
+    }
+  };
+
+  const onOpenEdit = async (recipe: Recipe) => {
+    const fullRecipe = await getRecipeDetails(recipe.id);
+    if (!fullRecipe) {
+      return;
+    }
+
+    const editorValue = toEditorValue(fullRecipe.howToPrepare || "");
+    setSelectedRecipe(fullRecipe);
     setRecipeImageFile(null);
-    setHowToPrepareEditor(toEditorValue(recipe.howToPrepare || ""));
+    setHowToPrepareEditor(editorValue);
     setIngredientInput("");
     setFormData({
-      recipeName: recipe.recipeName || "",
-      durationMinutes: String(recipe.durationMinutes || 10),
-      recipeType: recipe.recipeType || "breakfast",
-      userType: recipe.userType || "normal_user",
-      assignedUser: recipe.assignedUser?.id || "",
-      howToPrepare: recipe.howToPrepare || "",
-      ingredients: recipe.ingredients || [],
-      recipeImage: recipe.recipeImage || "",
-      caloriesKcal: String(recipe.caloriesKcal || 0),
-      proteinG: String(recipe.proteinG || 0),
-      carbsG: String(recipe.carbsG || 0),
-      fatG: String(recipe.fatG || 0),
-      status: recipe.status || "published",
+      recipeName: fullRecipe.recipeName || "",
+      durationMinutes: String(fullRecipe.durationMinutes || 10),
+      recipeType: fullRecipe.recipeType || "breakfast",
+      userType: fullRecipe.userType || "normal_user",
+      assignedUser: fullRecipe.assignedUser?.id || "",
+      howToPrepare: normalizeEditorHtml(editorValue),
+      ingredients: fullRecipe.ingredients || [],
+      recipeImage: fullRecipe.recipeImage || "",
+      caloriesKcal: String(fullRecipe.caloriesKcal || 0),
+      proteinG: String(fullRecipe.proteinG || 0),
+      carbsG: String(fullRecipe.carbsG || 0),
+      fatG: String(fullRecipe.fatG || 0),
+      status: fullRecipe.status || "published",
     });
     setFormOpen(true);
   };
@@ -219,7 +239,8 @@ export default function RecipesManagementPage() {
     payload.append("durationMinutes", String(Number(formData.durationMinutes)));
     payload.append("recipeType", formData.recipeType);
     payload.append("userType", formData.userType);
-    payload.append("howToPrepare", formData.howToPrepare);
+    const howToPrepareHtml = normalizeEditorHtml(toEditorValue(formData.howToPrepare || ""));
+    payload.append("howToPrepare", howToPrepareHtml);
     payload.append("ingredients", JSON.stringify(ingredients));
     payload.append("caloriesKcal", formData.caloriesKcal);
     payload.append("proteinG", formData.proteinG);
@@ -305,19 +326,27 @@ export default function RecipesManagementPage() {
                             <button
                               type="button"
                               className="inline-flex h-8 items-center gap-2 rounded-md border border-[#2f80cc] bg-[#102849] px-3 text-xs font-semibold text-[#63bfff] transition-colors hover:bg-[#16345c]"
-                              onClick={() => {
-                                setSelectedRecipe(recipe);
+                              onClick={async () => {
+                                const fullRecipe = await getRecipeDetails(recipe.id);
+                                if (!fullRecipe) {
+                                  return;
+                                }
+                                setSelectedRecipe(fullRecipe);
                                 setViewOpen(true);
                               }}
+                              disabled={loadingRecipeId === recipe.id}
                               aria-label="View recipe details"
                             >
                               <Eye className="size-3.5" />
-                              View Details
+                              {loadingRecipeId === recipe.id ? "Loading..." : "View Details"}
                             </button>
                             <button
                               type="button"
                               className="inline-flex size-8 items-center justify-center rounded-full bg-[#22bf61] text-white transition-colors hover:bg-[#2cd46d]"
-                              onClick={() => onOpenEdit(recipe)}
+                              onClick={() => {
+                                void onOpenEdit(recipe);
+                              }}
+                              disabled={loadingRecipeId === recipe.id}
                               aria-label="Edit recipe"
                             >
                               <SquarePen className="size-4" />

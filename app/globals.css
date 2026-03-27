@@ -94,6 +94,68 @@ a {
   border-color: rgba(126, 185, 230, 0.75);
 }
 
+.recipe-html-content p {
+  margin: 0 0 0.5rem;
+}
+
+.recipe-html-content p:last-child {
+  margin-bottom: 0;
+}
+
+.recipe-html-content ol,
+.recipe-html-content ul {
+  margin: 0.25rem 0 0.5rem 1.25rem;
+  padding: 0;
+  list-style-position: outside;
+}
+
+.recipe-html-content li {
+  margin: 0.15rem 0;
+}
+
+.recipe-html-content ol {
+  list-style-type: decimal;
+}
+
+.recipe-html-content ul {
+  list-style-type: disc;
+}
+
+.recipe-html-content li[data-list="ordered"] {
+  list-style-type: decimal;
+}
+
+.recipe-html-content li[data-list="bullet"] {
+  list-style-type: disc;
+}
+
+.recipe-html-content .ql-ui {
+  display: none;
+}
+
+.recipe-html-content h1,
+.recipe-html-content h2,
+.recipe-html-content h3 {
+  margin: 0.25rem 0 0.5rem;
+  line-height: 1.25;
+  color: #f8fbff;
+}
+
+.recipe-html-content h1 {
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.recipe-html-content h2 {
+  font-size: 1.15rem;
+  font-weight: 650;
+}
+
+.recipe-html-content h3 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
 .recipe-quill .ql-snow .ql-stroke {
   stroke: rgba(222, 240, 255, 0.9);
 }

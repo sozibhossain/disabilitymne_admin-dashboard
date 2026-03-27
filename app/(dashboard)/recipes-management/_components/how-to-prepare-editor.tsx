@@ -24,16 +24,37 @@ const escapeHtml = (value: string) =>
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
 
-export const toEditorValue = (value: string) => {
-  if (!value.trim()) {
+const stripHtml = (value: string) =>
+  value
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .trim();
+
+export const normalizeEditorHtml = (value: string) => {
+  const normalized = value.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  if (!normalized) {
     return "";
   }
 
-  if (/<[a-z][\s\S]*>/i.test(value)) {
-    return value;
+  if (stripHtml(normalized).length === 0) {
+    return "";
   }
 
-  return escapeHtml(value).replaceAll("\n", "<br />");
+  return normalized;
+};
+
+export const toEditorValue = (value: string) => {
+  const normalized = value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+  if (!normalized.trim()) {
+    return "";
+  }
+
+  if (/<[a-z][\s\S]*>/i.test(normalized)) {
+    return normalized;
+  }
+
+  return escapeHtml(normalized).replaceAll("\n", "<br />");
 };
 
 type HowToPrepareEditorProps = {
