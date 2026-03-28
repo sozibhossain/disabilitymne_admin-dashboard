@@ -143,16 +143,16 @@ const getPlanMeta = (program: Program) => {
     };
   }
 
-  if (rawPlan.includes("free") || rawPlan.includes("trial")) {
+  if (rawPlan.includes("annual")) {
     return {
-      label: "Free Trial user",
+      label: "Annual user",
       className: "bg-[#0d97ff] text-white",
     };
   }
 
-  if (rawPlan.includes("six") || rawPlan.includes("6")) {
+  if (rawPlan.includes("quarterly")) {
     return {
-      label: "Six month user",
+      label: "Quarterly user",
       className: "bg-[#4eabff] text-white",
     };
   }

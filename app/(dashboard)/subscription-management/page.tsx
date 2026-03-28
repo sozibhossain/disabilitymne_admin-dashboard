@@ -25,7 +25,7 @@ import {
 } from "@/lib/api";
 
 const defaultForm = {
-  key: "monthly_plan",
+  key: "monthly",
   name: "",
   price: "29.99",
   currency: "USD",
@@ -36,25 +36,52 @@ const defaultForm = {
 };
 
 const planThemeByKey: Record<string, { border: string; price: string; check: string }> = {
-  free_trial: {
+  annual: {
     border: "border-[#2cd46d]",
     price: "text-[#2cd46d]",
     check: "text-[#2cd46d]",
   },
-  monthly_plan: {
+  monthly: {
     border: "border-[#1f97ff]",
     price: "text-[#1f97ff]",
     check: "text-[#1f97ff]",
   },
-  six_month_plan: {
+  quarterly: {
     border: "border-[#ffcb00]",
     price: "text-[#ffcb00]",
     check: "text-[#ffcb00]",
   },
-  premium_plan: {
+  premium: {
     border: "border-[#ff9f31]",
     price: "text-[#ff9f31]",
     check: "text-[#ff9f31]",
+  },
+};
+
+const planDefaultsByKey: Record<string, Pick<typeof defaultForm, "name" | "price" | "durationLabel" | "durationMonths">> = {
+  monthly: {
+    name: "Monthly Plan",
+    price: "29.99",
+    durationLabel: "1 month",
+    durationMonths: "1",
+  },
+  quarterly: {
+    name: "Quarterly Plan",
+    price: "149.99",
+    durationLabel: "3 months",
+    durationMonths: "3",
+  },
+  annual: {
+    name: "Annual Plan",
+    price: "144",
+    durationLabel: "12 months",
+    durationMonths: "12",
+  },
+  premium: {
+    name: "Premium Plan",
+    price: "150",
+    durationLabel: "1 month",
+    durationMonths: "1",
   },
 };
 
@@ -126,7 +153,7 @@ export default function SubscriptionManagementPage() {
     event.preventDefault();
 
     const payload = {
-      key: formData.key as "free_trial" | "monthly_plan" | "six_month_plan" | "premium_plan",
+      key: formData.key as "monthly" | "quarterly" | "annual" | "premium",
       name: formData.name,
       price: Number(formData.price),
       currency: formData.currency,
@@ -161,7 +188,7 @@ export default function SubscriptionManagementPage() {
       ) : (
         <div className="grid grid-cols-1 gap-4">
           {plans.map((plan) => {
-            const theme = planThemeByKey[plan.key] || planThemeByKey.monthly_plan;
+            const theme = planThemeByKey[plan.key] || planThemeByKey.monthly;
             const priceLabel = `${Number(plan.price || 0).toFixed(2)}$`;
 
             return (
@@ -227,12 +254,27 @@ export default function SubscriptionManagementPage() {
               <Select
                 value={formData.key}
                 disabled={Boolean(selectedPlan)}
-                onChange={(event) => setFormData((prev) => ({ ...prev, key: event.target.value }))}
+                onChange={(event) =>
+                  setFormData((prev) => {
+                    const nextKey = event.target.value;
+                    const defaults = planDefaultsByKey[nextKey];
+                    if (!defaults) {
+                      return { ...prev, key: nextKey };
+                    }
+
+                    return {
+                      ...prev,
+                      key: nextKey,
+                      ...defaults,
+                      trialDays: "0",
+                    };
+                  })
+                }
               >
-                <option value="free_trial">Free Trial</option>
-                <option value="monthly_plan">Monthly Plan</option>
-                <option value="six_month_plan">Six Month Plan</option>
-                <option value="premium_plan">Premium Plan</option>
+                <option value="monthly">Monthly Plan</option>
+                <option value="quarterly">Quarterly Plan</option>
+                <option value="annual">Annual Plan</option>
+                <option value="premium">Premium Plan</option>
               </Select>
             </div>
             <div className="space-y-2">
@@ -277,15 +319,6 @@ export default function SubscriptionManagementPage() {
                 value={formData.durationMonths}
                 onChange={(event) => setFormData((prev) => ({ ...prev, durationMonths: event.target.value }))}
                 required
-              />
-            </div>
-            <div className="space-y-2 md:col-span-2">
-              <Label>Trial Days</Label>
-              <Input
-                type="number"
-                min={0}
-                value={formData.trialDays}
-                onChange={(event) => setFormData((prev) => ({ ...prev, trialDays: event.target.value }))}
               />
             </div>
             <div className="space-y-2 md:col-span-2">

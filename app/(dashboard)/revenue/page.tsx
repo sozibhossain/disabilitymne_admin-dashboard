@@ -17,21 +17,28 @@ import { formatDate } from "@/lib/utils";
 const getSubscriptionMeta = (planKey?: string | null) => {
   const key = String(planKey || "").toLowerCase();
 
-  if (key === "premium_plan") {
+  if (key === "premium") {
     return {
       label: "Premium user",
       className: "border-transparent bg-[#2ccf62] text-white",
     };
   }
 
-  if (key === "six_month_plan") {
+  if (key === "annual") {
     return {
-      label: "Six month user",
+      label: "Annual user",
       className: "border-transparent bg-[#1f97ff] text-white",
     };
   }
 
-  if (key === "monthly_plan") {
+  if (key === "quarterly") {
+    return {
+      label: "Quarterly user",
+      className: "border-transparent bg-[#8f7dff] text-white",
+    };
+  }
+
+  if (key === "monthly") {
     return {
       label: "Monthly user",
       className: "border-transparent bg-[#ff9f31] text-white",
@@ -39,8 +46,8 @@ const getSubscriptionMeta = (planKey?: string | null) => {
   }
 
   return {
-    label: "Free Trial user",
-    className: "border-[#2ccf62] bg-[#1d5f3f]/70 text-[#2ccf62]",
+    label: "No plan",
+    className: "border-white/30 bg-transparent text-slate-200",
   };
 };
 
@@ -106,10 +113,10 @@ export default function RevenuePage() {
               }}
             >
               <option value="">All</option>
-              <option value="free_trial">Free Trial</option>
-              <option value="monthly_plan">Monthly</option>
-              <option value="six_month_plan">Six month</option>
-              <option value="premium_plan">Premium</option>
+              <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option>
+              <option value="annual">Annual</option>
+              <option value="premium">Premium</option>
             </Select>
           </div>
 

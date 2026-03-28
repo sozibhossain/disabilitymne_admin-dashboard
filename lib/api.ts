@@ -32,7 +32,8 @@ export type DashboardOverview = {
   totals: {
     totalUsers: number;
     totalMonthlyUsers: number;
-    totalSixMonthUsers: number;
+    totalQuarterlyUsers: number;
+    totalAnnualUsers: number;
     totalPremiumUsers: number;
     totalRevenue: number;
     totalRevenueDisplay: string;
@@ -138,7 +139,7 @@ export type Recipe = {
 };
 
 export type SubscriptionPlan = {
-  key: "free_trial" | "monthly_plan" | "six_month_plan" | "premium_plan";
+  key: "monthly" | "quarterly" | "annual" | "premium";
   name: string;
   price: number;
   currency: string;
@@ -643,7 +644,7 @@ export async function getSubscriptionPlans(includeInactive = true) {
 }
 
 export async function createSubscriptionPlan(payload: {
-  key: "free_trial" | "monthly_plan" | "six_month_plan" | "premium_plan";
+  key: "monthly" | "quarterly" | "annual" | "premium";
   name: string;
   price: number;
   currency: string;

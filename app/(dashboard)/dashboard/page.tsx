@@ -69,11 +69,18 @@ const cardConfigs = [
     iconColor: "bg-[#1890ff]",
   },
   {
-    label: "Total Six Month User",
-    key: "totalSixMonthUsers",
+    label: "Total Quarterly User",
+    key: "totalQuarterlyUsers",
     color: "from-[#4c481a] to-[#111c31]",
     icon: UserPlus,
     iconColor: "bg-[#ff9f31]",
+  },
+  {
+    label: "Total Annual user",
+    key: "totalAnnualUsers",
+    color: "from-[#2d2158] to-[#111c31]",
+    icon: UserPlus,
+    iconColor: "bg-[#8f7dff]",
   },
   {
     label: "Total Premium user",
@@ -93,10 +100,10 @@ const cardConfigs = [
 ];
 
 const subscriptionColorMap: Record<string, string> = {
-  premium_plan: "#3dcc5f",
-  free_trial: "#1890ff",
-  six_month_plan: "#ff1d58",
-  monthly_plan: "#ff9f31",
+  monthly: "#ff9f31",
+  quarterly: "#ff1d58",
+  annual: "#1890ff",
+  premium: "#3dcc5f",
 };
 
 const RECENT_USERS_PAGE_SIZE = 5;
@@ -188,7 +195,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stats Cards */}
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
         {cardConfigs.map((config) => (
           <div
             key={config.label}
@@ -400,8 +407,10 @@ export default function DashboardPage() {
                           "rounded-full px-6 py-1 font-normal text-[10px] border-none min-w-[100px] justify-center",
                           user.subscription?.includes("Premium")
                             ? "bg-[#3dcc5f] text-white"
-                            : user.subscription?.includes("Trial")
+                            : user.subscription?.includes("Annual")
                               ? "bg-[#1890ff] text-white"
+                              : user.subscription?.includes("Quarterly")
+                                ? "bg-[#8f7dff] text-white"
                               : "bg-[#ff9f31] text-white",
                         )}
                       >

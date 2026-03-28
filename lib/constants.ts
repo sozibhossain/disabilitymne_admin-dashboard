@@ -32,8 +32,8 @@ export const authRoutes = ["/login", "/forgot-password", "/verify-otp", "/reset-
 export const defaultProtectedRoute = "/dashboard";
 
 export const planPriceFallback: Record<string, number> = {
-  free_trial: 0,
-  monthly_plan: 29.99,
-  six_month_plan: 149.99,
-  premium_plan: 150,
+  monthly: 29.99,
+  quarterly: 149.99,
+  annual: 144,
+  premium: 150,
 };

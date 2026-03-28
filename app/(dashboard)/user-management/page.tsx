@@ -33,10 +33,17 @@ const getSubscriptionMeta = (value: string) => {
     };
   }
 
-  if (normalized.includes("free") || normalized.includes("trial")) {
+  if (normalized.includes("annual")) {
     return {
-      label: "Free Trial user",
+      label: "Annual user",
       className: "bg-[#0d97ff] text-white",
+    };
+  }
+
+  if (normalized.includes("quarterly")) {
+    return {
+      label: "Quarterly user",
+      className: "bg-[#8f7dff] text-white",
     };
   }
 
