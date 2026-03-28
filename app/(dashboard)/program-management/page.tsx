@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Eye, Plus, SquarePen, Trash2, Upload, X } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowUp, Eye, Plus, SquarePen, Trash2, Upload, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
@@ -41,17 +41,96 @@ const defaultForm = {
   assignedUser: "",
   programDescription: "",
   mobilityType: "",
-  exerciseIds: "",
   programImages: [] as string[],
   programThumbnails: [] as string[],
   status: "published",
 };
 
-const parseExerciseIds = (value: string) =>
-  value
-    .split(",")
-    .map((item) => item.trim())
-    .filter((item, index, list) => item.length > 0 && list.indexOf(item) === index);
+type WorkoutDayAssignment = {
+  dayIndex: number;
+  exerciseIds: string[];
+};
+
+const WEEKDAY_OPTIONS: Array<{ dayIndex: number; label: string }> = [
+  { dayIndex: 1, label: "Mon" },
+  { dayIndex: 2, label: "Tue" },
+  { dayIndex: 3, label: "Wed" },
+  { dayIndex: 4, label: "Thu" },
+  { dayIndex: 5, label: "Fri" },
+  { dayIndex: 6, label: "Sat" },
+  { dayIndex: 7, label: "Sun" },
+];
+
+const DEFAULT_DAY_INDICES = [1, 3, 5];
+
+const getWorkoutDayLabel = (dayIndex: number) =>
+  WEEKDAY_OPTIONS.find((day) => day.dayIndex === dayIndex)?.label || `Day ${dayIndex}`;
+
+const normalizeWorkoutDays = (days: WorkoutDayAssignment[]) => {
+  const seenDays = new Set<number>();
+
+  return (Array.isArray(days) ? days : [])
+    .map((day) => ({
+      dayIndex: Number(day.dayIndex),
+      exerciseIds: Array.from(
+        new Set(
+          (Array.isArray(day.exerciseIds) ? day.exerciseIds : [])
+            .map((id) => String(id).trim())
+            .filter(Boolean)
+        )
+      ),
+    }))
+    .filter((day) => Number.isInteger(day.dayIndex) && day.dayIndex >= 1 && day.dayIndex <= 7)
+    .filter((day) => {
+      if (seenDays.has(day.dayIndex)) {
+        return false;
+      }
+
+      seenDays.add(day.dayIndex);
+      return true;
+    })
+    .sort((a, b) => a.dayIndex - b.dayIndex);
+};
+
+const deriveExerciseIdsFromWorkoutDays = (days: WorkoutDayAssignment[]) =>
+  Array.from(new Set(normalizeWorkoutDays(days).flatMap((day) => day.exerciseIds)));
+
+const distributeExerciseIdsAcrossDays = (exerciseIds: string[]) => {
+  const uniqueExerciseIds = Array.from(
+    new Set((Array.isArray(exerciseIds) ? exerciseIds : []).map((id) => String(id).trim()).filter(Boolean))
+  );
+
+  if (uniqueExerciseIds.length === 0) {
+    return [] as WorkoutDayAssignment[];
+  }
+
+  const buckets = new Map(DEFAULT_DAY_INDICES.map((dayIndex) => [dayIndex, [] as string[]]));
+  uniqueExerciseIds.forEach((exerciseId, index) => {
+    const dayIndex = DEFAULT_DAY_INDICES[index % DEFAULT_DAY_INDICES.length];
+    const list = buckets.get(dayIndex);
+    if (list) {
+      list.push(exerciseId);
+    }
+  });
+
+  return DEFAULT_DAY_INDICES.map((dayIndex) => ({
+    dayIndex,
+    exerciseIds: buckets.get(dayIndex) || [],
+  })).filter((day) => day.exerciseIds.length > 0);
+};
+
+const extractWorkoutDaysFromProgram = (program: Program): WorkoutDayAssignment[] => {
+  if (Array.isArray(program.workoutDays) && program.workoutDays.length > 0) {
+    return normalizeWorkoutDays(
+      program.workoutDays.map((day) => ({
+        dayIndex: day.dayIndex,
+        exerciseIds: day.exerciseIds || day.exercises.map((exercise) => exercise.id).filter(Boolean),
+      }))
+    );
+  }
+
+  return distributeExerciseIdsAcrossDays(program.exerciseIds || []);
+};
 
 const getPlanMeta = (program: Program) => {
   const rawPlan = String(program.plan || "").toLowerCase();
@@ -96,7 +175,9 @@ export default function ProgramManagementPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
   const [formData, setFormData] = useState(defaultForm);
-  const [exercisePickerValue, setExercisePickerValue] = useState("");
+  const [workoutDays, setWorkoutDays] = useState<WorkoutDayAssignment[]>([]);
+  const [activePlannerDay, setActivePlannerDay] = useState<number | null>(null);
+  const [plannerExercisePickerValue, setPlannerExercisePickerValue] = useState("");
   const [programImageFiles, setProgramImageFiles] = useState<File[]>([]);
   const [programThumbnailFiles, setProgramThumbnailFiles] = useState<File[]>([]);
 
@@ -126,7 +207,9 @@ export default function ProgramManagementPage() {
 
   const resetFormState = () => {
     setFormData(defaultForm);
-    setExercisePickerValue("");
+    setWorkoutDays([]);
+    setActivePlannerDay(null);
+    setPlannerExercisePickerValue("");
     setProgramImageFiles([]);
     setProgramThumbnailFiles([]);
   };
@@ -189,18 +272,22 @@ export default function ProgramManagementPage() {
 
   const programs = useMemo(() => programsQuery.data?.data || [], [programsQuery.data?.data]);
   const exerciseOptions = useMemo(() => exercisesQuery.data?.data || [], [exercisesQuery.data?.data]);
-  const selectedExerciseIds = useMemo(() => parseExerciseIds(formData.exerciseIds), [formData.exerciseIds]);
+  const normalizedWorkoutDays = useMemo(() => normalizeWorkoutDays(workoutDays), [workoutDays]);
+  const unionExerciseIds = useMemo(
+    () => deriveExerciseIdsFromWorkoutDays(normalizedWorkoutDays),
+    [normalizedWorkoutDays]
+  );
+  const resolvedActivePlannerDay = useMemo(() => {
+    if (normalizedWorkoutDays.length === 0) return null;
+    if (activePlannerDay && normalizedWorkoutDays.some((day) => day.dayIndex === activePlannerDay)) {
+      return activePlannerDay;
+    }
 
-  const selectedExercises = useMemo(
-    () =>
-      selectedExerciseIds.map((id) => {
-        const found = exerciseOptions.find((exercise) => exercise.id === id);
-        return {
-          id,
-          name: found?.exerciseName || id,
-        };
-      }),
-    [exerciseOptions, selectedExerciseIds]
+    return normalizedWorkoutDays[0].dayIndex;
+  }, [activePlannerDay, normalizedWorkoutDays]);
+  const activeWorkoutDay = useMemo(
+    () => normalizedWorkoutDays.find((day) => day.dayIndex === resolvedActivePlannerDay) || null,
+    [normalizedWorkoutDays, resolvedActivePlannerDay]
   );
 
   const onOpenCreate = () => {
@@ -210,10 +297,14 @@ export default function ProgramManagementPage() {
   };
 
   const onOpenEdit = (program: Program) => {
+    const nextWorkoutDays = extractWorkoutDaysFromProgram(program);
+
     setSelectedProgram(program);
     setProgramImageFiles([]);
     setProgramThumbnailFiles([]);
-    setExercisePickerValue("");
+    setWorkoutDays(nextWorkoutDays);
+    setActivePlannerDay(nextWorkoutDays[0]?.dayIndex || null);
+    setPlannerExercisePickerValue("");
     setFormData({
       programName: program.programName || "",
       durationMinutes: String(program.durationMinutes || 30),
@@ -222,7 +313,6 @@ export default function ProgramManagementPage() {
       assignedUser: program.assignedUser?.id || "",
       programDescription: program.programDescription || "",
       mobilityType: program.mobilityType || "",
-      exerciseIds: program.exerciseIds?.join(",") || "",
       programImages:
         Array.isArray(program.programImages) && program.programImages.length > 0
           ? program.programImages
@@ -252,27 +342,82 @@ export default function ProgramManagementPage() {
     router.push("/exercise-library?open=create");
   };
 
-  const onAddExercise = (exerciseId: string) => {
-    if (!exerciseId) return;
-    if (selectedExerciseIds.includes(exerciseId)) {
-      setExercisePickerValue("");
-      return;
+  const selectWorkoutPlannerDay = (dayIndex: number) => {
+    const isAlreadySelected = normalizedWorkoutDays.some((day) => day.dayIndex === dayIndex);
+    if (!isAlreadySelected) {
+      setWorkoutDays((prev) => normalizeWorkoutDays([...prev, { dayIndex, exerciseIds: [] }]));
     }
 
-    setFormData((prev) => ({
-      ...prev,
-      exerciseIds: [...selectedExerciseIds, exerciseId].join(","),
-    }));
-    setExercisePickerValue("");
+    setActivePlannerDay(dayIndex);
+    setPlannerExercisePickerValue("");
   };
 
-  const onRemoveExercise = (exerciseId: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      exerciseIds: parseExerciseIds(prev.exerciseIds)
-        .filter((id) => id !== exerciseId)
-        .join(","),
-    }));
+  const removeWorkoutPlannerDay = (dayIndex: number) => {
+    setWorkoutDays((prev) => prev.filter((day) => day.dayIndex !== dayIndex));
+    if (activePlannerDay === dayIndex) {
+      setActivePlannerDay(null);
+    }
+    setPlannerExercisePickerValue("");
+  };
+
+  const addExerciseToWorkoutDay = (dayIndex: number, exerciseId: string) => {
+    if (!exerciseId) return;
+
+    setWorkoutDays((prev) =>
+      normalizeWorkoutDays(
+        prev.map((day) =>
+          day.dayIndex !== dayIndex
+            ? day
+            : {
+                ...day,
+                exerciseIds: day.exerciseIds.includes(exerciseId)
+                  ? day.exerciseIds
+                  : [...day.exerciseIds, exerciseId],
+              }
+        )
+      )
+    );
+    setPlannerExercisePickerValue("");
+  };
+
+  const removeExerciseFromWorkoutDay = (dayIndex: number, exerciseId: string) => {
+    setWorkoutDays((prev) =>
+      normalizeWorkoutDays(
+        prev.map((day) =>
+          day.dayIndex !== dayIndex
+            ? day
+            : {
+                ...day,
+                exerciseIds: day.exerciseIds.filter((id) => id !== exerciseId),
+              }
+        )
+      )
+    );
+  };
+
+  const moveExerciseInWorkoutDay = (dayIndex: number, exerciseId: string, direction: "up" | "down") => {
+    setWorkoutDays((prev) =>
+      normalizeWorkoutDays(
+        prev.map((day) => {
+          if (day.dayIndex !== dayIndex) return day;
+
+          const currentIndex = day.exerciseIds.findIndex((id) => id === exerciseId);
+          if (currentIndex < 0) return day;
+
+          const nextIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+          if (nextIndex < 0 || nextIndex >= day.exerciseIds.length) return day;
+
+          const nextExerciseIds = [...day.exerciseIds];
+          const [item] = nextExerciseIds.splice(currentIndex, 1);
+          nextExerciseIds.splice(nextIndex, 0, item);
+
+          return {
+            ...day,
+            exerciseIds: nextExerciseIds,
+          };
+        })
+      )
+    );
   };
 
   const onSubmitForm = (event: React.FormEvent<HTMLFormElement>) => {
@@ -283,8 +428,18 @@ export default function ProgramManagementPage() {
       return;
     }
 
-    const exerciseIds = parseExerciseIds(formData.exerciseIds);
-    if (exerciseIds.length === 0) {
+    if (normalizedWorkoutDays.length === 0) {
+      toast.error("Select at least one workout day.");
+      return;
+    }
+
+    const emptyDay = normalizedWorkoutDays.find((day) => day.exerciseIds.length === 0);
+    if (emptyDay) {
+      toast.error(`${getWorkoutDayLabel(emptyDay.dayIndex)} must include at least one exercise.`);
+      return;
+    }
+
+    if (unionExerciseIds.length === 0) {
       toast.error("Select at least one exercise.");
       return;
     }
@@ -297,7 +452,8 @@ export default function ProgramManagementPage() {
     payload.append("userType", formData.userType);
     payload.append("programDescription", formData.programDescription);
     payload.append("mobilityType", formData.mobilityType);
-    payload.append("exerciseIds", JSON.stringify(exerciseIds));
+    payload.append("exerciseIds", JSON.stringify(unionExerciseIds));
+    payload.append("workoutDays", JSON.stringify(normalizedWorkoutDays));
     payload.append("status", formData.status);
 
     if (formData.userType === "premium_user" && formData.assignedUser) {
@@ -329,6 +485,17 @@ export default function ProgramManagementPage() {
 
   const displayedProgramImages = programImagePreviews.length > 0 ? programImagePreviews : formData.programImages;
   const displayedProgramThumbnails = programThumbnailPreviews.length > 0 ? programThumbnailPreviews : formData.programThumbnails;
+  const activeDayExercises = useMemo(
+    () =>
+      (activeWorkoutDay?.exerciseIds || []).map((exerciseId) => {
+        const matchedExercise = exerciseOptions.find((exercise) => exercise.id === exerciseId);
+        return {
+          id: exerciseId,
+          name: matchedExercise?.exerciseName || exerciseId,
+        };
+      }),
+    [activeWorkoutDay?.exerciseIds, exerciseOptions]
+  );
 
   const removeProgramImageAt = (index: number) => {
     if (programImagePreviews.length > 0) {
@@ -355,6 +522,36 @@ export default function ProgramManagementPage() {
   };
 
   const activeViewProgram = viewProgramQuery.data || selectedProgram;
+  const activeViewWorkoutDays = useMemo(() => {
+    if (!activeViewProgram) {
+      return [] as Array<{
+        dayIndex: number;
+        dayLabel: string;
+        exercises: Array<{ id: string; exerciseName: string }>;
+      }>;
+    }
+
+    const fallbackExerciseLookup = new Map(
+      (activeViewProgram.exercises || []).map((exercise) => [exercise.id, exercise.exerciseName])
+    );
+    const extractedDays = extractWorkoutDaysFromProgram(activeViewProgram);
+
+    return extractedDays.map((day) => ({
+      dayIndex: day.dayIndex,
+      dayLabel:
+        activeViewProgram.workoutDays?.find((item) => item.dayIndex === day.dayIndex)?.dayLabel ||
+        getWorkoutDayLabel(day.dayIndex),
+      exercises: day.exerciseIds.map((exerciseId) => ({
+        id: exerciseId,
+        exerciseName:
+          activeViewProgram.workoutDays
+            ?.find((item) => item.dayIndex === day.dayIndex)
+            ?.exercises.find((exercise) => exercise.id === exerciseId)?.exerciseName ||
+          fallbackExerciseLookup.get(exerciseId) ||
+          exerciseId,
+      })),
+    }));
+  }, [activeViewProgram]);
   const featuredExercise = activeViewProgram?.exercises?.[0] as
     | (Program["exercises"][number] & { demoVideo?: string | null; demoVideos?: string[] })
     | undefined;
@@ -666,46 +863,132 @@ export default function ProgramManagementPage() {
               </label>
             </div>
 
-            <div className="space-y-2 md:col-span-2">
-              <Label className="text-xs">Select Exercises</Label>
-              <Select
-                value={exercisePickerValue}
-                className="h-10"
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setExercisePickerValue(value);
-                  onAddExercise(value);
-                }}
-              >
-                <option value="">Select exercises</option>
-                {exerciseOptions.map((exercise) => (
-                  <option key={exercise.id} value={exercise.id}>
-                    {exercise.exerciseName}
-                  </option>
-                ))}
-              </Select>
-
-              {selectedExercises.length > 0 ? (
+            <div className="space-y-3 md:col-span-2">
+              <Label className="text-xs">Workout Day Planner</Label>
+              <div className="rounded-lg border border-[#7cb6df55] bg-[#1b3457]/35 p-3">
+                <p className="text-xs text-slate-200">Choose workout days (Monday = 1 to Sunday = 7)</p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {selectedExercises.map((exercise) => (
-                    <span
-                      key={exercise.id}
-                      className="inline-flex items-center gap-1 rounded-full border border-[#7cb6df66] bg-[#1b3457]/60 px-3 py-1 text-xs text-slate-100"
-                    >
-                      {exercise.name}
-                      <button
-                        type="button"
-                        className="rounded-full p-0.5 text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
-                        onClick={() => onRemoveExercise(exercise.id)}
-                        aria-label="Remove exercise"
-                      >
-                        <X className="size-3" />
-                      </button>
+                  {WEEKDAY_OPTIONS.map((day) => {
+                    const isSelected = normalizedWorkoutDays.some((item) => item.dayIndex === day.dayIndex);
+                    const isActive = isSelected && activePlannerDay === day.dayIndex;
+
+                    return (
+                      <div key={day.dayIndex} className="inline-flex items-center gap-1">
+                        <button
+                          type="button"
+                          className={cn(
+                            "inline-flex h-8 items-center justify-center rounded-md border px-3 text-xs font-semibold transition-colors",
+                            isActive
+                              ? "border-[#9fd8ff] bg-[#5d97c4] text-white"
+                              : isSelected
+                                ? "border-[#7cb6df99] bg-[#1f4268] text-slate-100 hover:bg-[#285176]"
+                                : "border-[#7cb6df55] bg-[#10253f] text-slate-300 hover:bg-[#163354]"
+                          )}
+                          onClick={() => selectWorkoutPlannerDay(day.dayIndex)}
+                        >
+                          {day.label}
+                        </button>
+                        {isSelected ? (
+                          <button
+                            type="button"
+                            className="inline-flex size-5 items-center justify-center rounded-full border border-[#7cb6df66] bg-[#132f4f] text-slate-300 transition-colors hover:bg-[#20486e] hover:text-white"
+                            onClick={() => removeWorkoutPlannerDay(day.dayIndex)}
+                            aria-label={`Remove ${day.label}`}
+                          >
+                            <X className="size-3" />
+                          </button>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-[11px] text-slate-300/90">
+                  {normalizedWorkoutDays.length} day(s) selected • {unionExerciseIds.length} unique exercise(s)
+                </p>
+              </div>
+
+              {activeWorkoutDay ? (
+                <div className="rounded-lg border border-[#7cb6df55] bg-[#1b3457]/35 p-3">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-white">
+                      Exercises for {getWorkoutDayLabel(activeWorkoutDay.dayIndex)}
+                    </p>
+                    <span className="rounded-full border border-[#7cb6df66] bg-[#163457]/80 px-2 py-1 text-[11px] text-slate-200">
+                      {activeDayExercises.length} assigned
                     </span>
-                  ))}
+                  </div>
+
+                  <Select
+                    value={plannerExercisePickerValue}
+                    className="h-10"
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setPlannerExercisePickerValue(value);
+                      addExerciseToWorkoutDay(activeWorkoutDay.dayIndex, value);
+                    }}
+                  >
+                    <option value="">Add exercise to {getWorkoutDayLabel(activeWorkoutDay.dayIndex)}</option>
+                    {exerciseOptions.map((exercise) => (
+                      <option key={exercise.id} value={exercise.id}>
+                        {exercise.exerciseName}
+                      </option>
+                    ))}
+                  </Select>
+
+                  {activeDayExercises.length > 0 ? (
+                    <ul className="mt-3 space-y-2">
+                      {activeDayExercises.map((exercise, index) => (
+                        <li
+                          key={exercise.id}
+                          className="flex items-center justify-between gap-2 rounded-md border border-[#7cb6df44] bg-[#173456]/55 px-3 py-2 text-sm text-slate-100"
+                        >
+                          <div className="inline-flex items-center gap-2">
+                            <span className="inline-flex size-5 items-center justify-center rounded-full bg-[#4f8dc6] text-[11px] font-semibold">
+                              {index + 1}
+                            </span>
+                            {exercise.name}
+                          </div>
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              type="button"
+                              className="inline-flex size-6 items-center justify-center rounded border border-[#7cb6df66] bg-[#102849] text-slate-200 transition-colors hover:bg-[#18406d] disabled:opacity-40"
+                              onClick={() => moveExerciseInWorkoutDay(activeWorkoutDay.dayIndex, exercise.id, "up")}
+                              disabled={index === 0}
+                              aria-label="Move up"
+                            >
+                              <ArrowUp className="size-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              className="inline-flex size-6 items-center justify-center rounded border border-[#7cb6df66] bg-[#102849] text-slate-200 transition-colors hover:bg-[#18406d] disabled:opacity-40"
+                              onClick={() => moveExerciseInWorkoutDay(activeWorkoutDay.dayIndex, exercise.id, "down")}
+                              disabled={index === activeDayExercises.length - 1}
+                              aria-label="Move down"
+                            >
+                              <ArrowDown className="size-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              className="inline-flex size-6 items-center justify-center rounded-full bg-[#ff2f5f] text-white transition-colors hover:bg-[#ff416f]"
+                              onClick={() => removeExerciseFromWorkoutDay(activeWorkoutDay.dayIndex, exercise.id)}
+                              aria-label="Remove exercise"
+                            >
+                              <X className="size-3.5" />
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-xs text-slate-300/85">
+                      No exercises assigned for this day yet. Add at least one to continue.
+                    </p>
+                  )}
                 </div>
               ) : (
-                <p className="text-xs text-slate-300/85">Select at least one exercise from the dropdown.</p>
+                <p className="text-xs text-slate-300/85">
+                  Select at least one workout day, then assign exercises for each selected day.
+                </p>
               )}
             </div>
 
@@ -842,7 +1125,7 @@ export default function ProgramManagementPage() {
 
             <div className="rounded-lg border border-[#7cb6df55] bg-[#1b3457]/35 p-3">
               <div className="mb-3 flex items-center justify-between">
-                <p className="text-sm font-semibold text-white">Exercises</p>
+                <p className="text-sm font-semibold text-white">Workout Days & Exercises</p>
                 <button
                   type="button"
                   className="inline-flex h-8 items-center gap-2 rounded-md border border-[#8ec5eb6e] bg-[linear-gradient(180deg,#98d5f8_0%,#5d97c4_100%)] px-3 text-xs font-semibold text-white"
@@ -853,30 +1136,34 @@ export default function ProgramManagementPage() {
                 </button>
               </div>
 
-              {activeViewProgram.exercises?.length ? (
-                <ul className="space-y-2">
-                  {activeViewProgram.exercises.map((exercise, index) => (
-                    <li key={exercise.id || `${exercise.exerciseName}-${index}`} className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 text-sm text-slate-100">
-                        <span className="inline-flex size-5 items-center justify-center rounded-full bg-[#4f8dc6] text-[11px] font-semibold">
-                          {index + 1}
+              {activeViewWorkoutDays.length > 0 ? (
+                <div className="space-y-3">
+                  {activeViewWorkoutDays.map((day) => (
+                    <div key={day.dayIndex} className="rounded-md border border-[#7cb6df44] bg-[#173456]/55 p-3">
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="text-sm font-semibold text-white">{day.dayLabel}</p>
+                        <span className="rounded-full border border-[#7cb6df66] bg-[#163457]/80 px-2 py-1 text-[11px] text-slate-200">
+                          {day.exercises.length} exercise(s)
                         </span>
-                        {exercise.exerciseName}
                       </div>
-                      <button
-                        type="button"
-                        className="inline-flex size-6 items-center justify-center rounded-full bg-[#ff2f5f] text-white"
-                        onClick={() => {
-                          closeViewModal();
-                          onOpenEdit(activeViewProgram);
-                        }}
-                        aria-label="Remove exercise"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </button>
-                    </li>
+
+                      {day.exercises.length > 0 ? (
+                        <ul className="space-y-2">
+                          {day.exercises.map((exercise, index) => (
+                            <li key={exercise.id || `${exercise.exerciseName}-${index}`} className="flex items-center gap-2 text-sm text-slate-100">
+                              <span className="inline-flex size-5 items-center justify-center rounded-full bg-[#4f8dc6] text-[11px] font-semibold">
+                                {index + 1}
+                              </span>
+                              {exercise.exerciseName}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-xs text-slate-300">No exercises assigned.</p>
+                      )}
+                    </div>
                   ))}
-                </ul>
+                </div>
               ) : (
                 <p className="text-sm text-slate-300">No exercises found.</p>
               )}

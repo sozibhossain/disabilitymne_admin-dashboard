@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  LineChart,
   CircleDollarSign,
   Dumbbell,
   Home,
@@ -21,6 +22,7 @@ export const navItems = [
   { label: "Recipes Management", href: "/recipes-management", icon: Soup },
   { label: "Subscription Management", href: "/subscription-management", icon: Wallet },
   { label: "Revenue", href: "/revenue", icon: CircleDollarSign },
+  { label: "Progress", href: "/progress", icon: LineChart },
   { label: "Feedback", href: "/feedback", icon: BarChart3 },
   { label: "Support", href: "/support", icon: MessageSquare },
   { label: "Settings", href: "/settings", icon: Settings },

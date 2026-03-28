@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, ChevronLeft, ChevronRight, Eye, Plus, SquarePen, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Eye, Plus, SquarePen, Trash2, X } from "lucide-react";
 import { Suspense, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -35,8 +35,8 @@ const defaultForm = {
   userType: "all_user",
   assignedUser: "",
   description: "",
-  keyBenefits: "",
-  muscleGroups: "",
+  keyBenefits: [] as string[],
+  muscleGroups: [] as string[],
   executionMode: "set_reps",
   setCount: "3",
   reps: "12",
@@ -75,6 +75,8 @@ function ExerciseLibraryContent() {
   const [viewOpen, setViewOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(() => searchParams.get("open") === "create");
   const [formData, setFormData] = useState(defaultForm);
+  const [keyBenefitInput, setKeyBenefitInput] = useState("");
+  const [muscleGroupInput, setMuscleGroupInput] = useState("");
   const [exerciseImageFile, setExerciseImageFile] = useState<File | null>(null);
   const [muscleImageFile, setMuscleImageFile] = useState<File | null>(null);
   const [demoVideoFile, setDemoVideoFile] = useState<File | null>(null);
@@ -84,6 +86,8 @@ function ExerciseLibraryContent() {
 
   const resetFormState = () => {
     setFormData(defaultForm);
+    setKeyBenefitInput("");
+    setMuscleGroupInput("");
     setExerciseImageFile(null);
     setMuscleImageFile(null);
     setDemoVideoFile(null);
@@ -184,13 +188,15 @@ function ExerciseLibraryContent() {
     setExerciseImageFile(null);
     setMuscleImageFile(null);
     setDemoVideoFile(null);
+    setKeyBenefitInput("");
+    setMuscleGroupInput("");
     setFormData({
       exerciseName: exercise.exerciseName || "",
       userType: exercise.userType || "all_user",
       assignedUser: exercise.assignedUser?.id || "",
       description: exercise.description || "",
-      keyBenefits: (exercise.keyBenefits || []).join(", "),
-      muscleGroups: (exercise.muscleGroups || []).join(", "),
+      keyBenefits: exercise.keyBenefits || [],
+      muscleGroups: exercise.muscleGroups || [],
       executionMode: exercise.executionMode || "set_reps",
       setCount: String(exercise.defaultSets?.length || 3),
       reps: String(primarySet?.reps ?? 12),
@@ -203,6 +209,23 @@ function ExerciseLibraryContent() {
       status: exercise.status || "published",
     });
     setFormOpen(true);
+  };
+
+  const addFormListItem = (field: "keyBenefits" | "muscleGroups", rawValue: string) => {
+    const value = rawValue.trim();
+    if (!value) return;
+
+    setFormData((prev) => ({
+      ...prev,
+      [field]: prev[field].includes(value) ? prev[field] : [...prev[field], value],
+    }));
+  };
+
+  const removeFormListItem = (field: "keyBenefits" | "muscleGroups", value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: prev[field].filter((item) => item !== value),
+    }));
   };
 
   const onSubmitForm = (event: React.FormEvent<HTMLFormElement>) => {
@@ -228,14 +251,8 @@ function ExerciseLibraryContent() {
       weightKg,
     }));
 
-    const keyBenefits = formData.keyBenefits
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-    const muscleGroups = formData.muscleGroups
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
+    const keyBenefits = formData.keyBenefits;
+    const muscleGroups = formData.muscleGroups;
 
     const payload = new FormData();
     payload.append("exerciseName", formData.exerciseName);
@@ -491,18 +508,104 @@ function ExerciseLibraryContent() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Key Benefits (comma separated)</Label>
-              <Input
-                value={formData.keyBenefits}
-                onChange={(event) => setFormData((prev) => ({ ...prev, keyBenefits: event.target.value }))}
-              />
+              <Label>Key Benefits</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={keyBenefitInput}
+                  onChange={(event) => setKeyBenefitInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      addFormListItem("keyBenefits", keyBenefitInput);
+                      setKeyBenefitInput("");
+                    }
+                  }}
+                  placeholder="Add a key benefit"
+                />
+                <Button
+                  type="button"
+                  className="shrink-0"
+                  onClick={() => {
+                    addFormListItem("keyBenefits", keyBenefitInput);
+                    setKeyBenefitInput("");
+                  }}
+                >
+                  <Plus className="mr-1 size-4" />
+                  Add
+                </Button>
+              </div>
+              {formData.keyBenefits.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {formData.keyBenefits.map((item) => (
+                    <span
+                      key={item}
+                      className="inline-flex items-center gap-1 rounded-full border border-[#7cb6df66] bg-[#1b3457]/60 px-3 py-1 text-xs text-slate-100"
+                    >
+                      {item}
+                      <button
+                        type="button"
+                        className="rounded-full p-0.5 text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+                        onClick={() => removeFormListItem("keyBenefits", item)}
+                        aria-label="Remove key benefit"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-300/85">Add one or more key benefits.</p>
+              )}
             </div>
             <div className="space-y-2">
-              <Label>Muscle Groups (comma separated)</Label>
-              <Input
-                value={formData.muscleGroups}
-                onChange={(event) => setFormData((prev) => ({ ...prev, muscleGroups: event.target.value }))}
-              />
+              <Label>Muscle Groups</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={muscleGroupInput}
+                  onChange={(event) => setMuscleGroupInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      addFormListItem("muscleGroups", muscleGroupInput);
+                      setMuscleGroupInput("");
+                    }
+                  }}
+                  placeholder="Add a muscle group"
+                />
+                <Button
+                  type="button"
+                  className="shrink-0"
+                  onClick={() => {
+                    addFormListItem("muscleGroups", muscleGroupInput);
+                    setMuscleGroupInput("");
+                  }}
+                >
+                  <Plus className="mr-1 size-4" />
+                  Add
+                </Button>
+              </div>
+              {formData.muscleGroups.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {formData.muscleGroups.map((item) => (
+                    <span
+                      key={item}
+                      className="inline-flex items-center gap-1 rounded-full border border-[#7cb6df66] bg-[#1b3457]/60 px-3 py-1 text-xs text-slate-100"
+                    >
+                      {item}
+                      <button
+                        type="button"
+                        className="rounded-full p-0.5 text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+                        onClick={() => removeFormListItem("muscleGroups", item)}
+                        aria-label="Remove muscle group"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-300/85">Add one or more muscle groups.</p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Execution Mode</Label>

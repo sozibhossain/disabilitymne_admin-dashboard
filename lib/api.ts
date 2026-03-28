@@ -66,6 +66,21 @@ export type Program = {
     image?: string | null;
     exerciseImages?: string[];
   }>;
+  workoutDays: Array<{
+    dayIndex: number;
+    dayLabel: string;
+    exerciseIds: string[];
+    totalExercises: number;
+    exercises: Array<{
+      id: string;
+      exerciseName: string;
+      executionMode?: string;
+      demoVideo?: string | null;
+      demoVideos?: string[];
+      image?: string | null;
+      exerciseImages?: string[];
+    }>;
+  }>;
   status: "draft" | "published" | "archived";
   isActive: boolean;
   programImage: string | null;
@@ -160,6 +175,45 @@ export type WorkoutExperience = {
   completedAt: string;
   createdAt: string;
   updatedAt: string;
+};
+
+export type WorkoutProgress = {
+  summary: {
+    completedWorkoutDays: number;
+    scheduledExercises: number;
+    completedExercises: number;
+    adherencePercent: number;
+    totalTrainingVolume: number;
+  };
+  series: {
+    adherenceByWeek: Array<{
+      weekStartDate: string;
+      scheduledExercises: number;
+      completedExercises: number;
+      adherencePercent: number;
+    }>;
+    strengthTrend: Array<{
+      weekStartDate: string | null;
+      exerciseId: string | null;
+      exerciseName: string;
+      bestWeightKg: number;
+      bestReps: number;
+      totalVolume: number;
+    }>;
+  };
+  recentLogs: Array<{
+    id: string;
+    user: { id: string; firstName: string; lastName: string; email: string } | null;
+    program: { id: string; programName: string } | null;
+    exercise: { id: string; exerciseName: string } | null;
+    sessionId: string | null;
+    dayIndex: number | null;
+    weekStartDate: string | null;
+    caloriesBurned: number;
+    durationMinutes: number;
+    trainingVolume: number;
+    completedAt: string;
+  }>;
 };
 
 export type ChatUser = {
@@ -380,6 +434,7 @@ export type CreateProgramPayload = {
   programDescription: string;
   mobilityType: string;
   exerciseIds: string[];
+  workoutDays?: Array<{ dayIndex: number; exerciseIds: string[] }>;
   programImages: string[];
   programThumbnails?: string[];
   status?: string;
@@ -395,6 +450,7 @@ export type UpdateProgramPayload = Partial<{
   programDescription: string;
   mobilityType: string;
   exerciseIds: string[];
+  workoutDays: Array<{ dayIndex: number; exerciseIds: string[] }>;
   programImages: string[];
   programThumbnails: string[];
   status: string;
@@ -655,6 +711,22 @@ export async function getWorkoutExperiences(params: {
 export async function getWorkoutExperienceById(experienceId: string) {
   const response = await api.get<ApiEnvelope<WorkoutExperience>>(`/admin/workout-experiences/${experienceId}`);
   return unwrap(response);
+}
+
+export async function getWorkoutProgress(params: {
+  page?: number;
+  limit?: number;
+  userId?: string;
+  programId?: string;
+  exerciseId?: string;
+  startDate?: string;
+  endDate?: string;
+}) {
+  const response = await api.get<ApiEnvelope<WorkoutProgress>>("/admin/workout-progress", { params });
+  return {
+    data: response.data.data,
+    meta: response.data.meta,
+  };
 }
 
 export async function getAdminSettingsProfile() {
